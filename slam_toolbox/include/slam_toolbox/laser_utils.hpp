@@ -41,7 +41,7 @@ inline std::vector<double> scanToReadings(const sensor_msgs::LaserScan& scan, co
       readings.push_back(*it);
     }
   }
-  else 
+  else
   {
     for(std::vector<float>::const_iterator it = scan.ranges.begin(); it != scan.ranges.end(); ++it)
     {
@@ -63,9 +63,19 @@ public:
   karto::LaserRangeFinder* getLaser();
   void invertScan(sensor_msgs::LaserScan& scan) const;
 
+  ros::Time getLastScanTime() const;
+  karto::Pose2 getLastPose() const;
+  bool isFirstMeasurement() const;
+  void isFirstMeasurement(bool isIt);
+  void setLastScanTime(const ros::Time last_time_new);
+  void setLastPose(const karto::Pose2 last_pose_new);
+
 private:
   karto::LaserRangeFinder* laser;
   bool inverted;
+  ros::Time last_scan_time;
+  karto::Pose2 last_pose;
+  bool first_measurement;
 };
 
 // Help take a scan from a laser and create a laser object

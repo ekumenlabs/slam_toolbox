@@ -125,7 +125,7 @@ void LocalizationSlamToolbox::laserCallback(
   {
     addScan(laser, scan, pose);
   }
-  
+
   return;
 }
 
@@ -188,7 +188,7 @@ LocalizedRangeScan* LocalizationSlamToolbox::addScan(
   } else {
     // compute our new transform
     setTransformFromPoses(range_scan->GetCorrectedPose(), karto_pose,
-      scan->header.stamp, update_reprocessing_transform);
+      scan->header, update_reprocessing_transform);
   }
 
   return range_scan;
@@ -209,16 +209,20 @@ void LocalizationSlamToolbox::localizePoseCallback(const
   boost::mutex::scoped_lock l(pose_mutex_);
   if (process_near_pose_)
   {
-    process_near_pose_.reset(new Pose2(msg->pose.pose.position.x, 
+    process_near_pose_.reset(new Pose2(msg->pose.pose.position.x,
       msg->pose.pose.position.y, tf2::getYaw(msg->pose.pose.orientation)));
   }
   else
   {
-    process_near_pose_ = std::make_unique<Pose2>(msg->pose.pose.position.x, 
-      msg->pose.pose.position.y, tf2::getYaw(msg->pose.pose.orientation));    
+    process_near_pose_ = std::make_unique<Pose2>(msg->pose.pose.position.x,
+      msg->pose.pose.position.y, tf2::getYaw(msg->pose.pose.orientation));
   }
 
-  first_measurement_ = true;
+  std::map<std::string, laser_utils::LaserMetadata>::iterator it;
+  for (it = lasers_.begin(); it != lasers_.end(); ++it)
+  {
+    it->second.isFirstMeasurement(true);
+  }
 
   boost::mutex::scoped_lock lock(smapper_mutex_);
   smapper_->clearLocalizationBuffer();

@@ -92,9 +92,10 @@ LaserMetadata LaserAssistant::toLaserMetadata(sensor_msgs::LaserScan scan)
 
 karto::LaserRangeFinder* LaserAssistant::makeLaser(const double& mountingYaw)
 {
-  karto::LaserRangeFinder* laser = 
+  const std::string name = "Custom Described Lidar " + scan_.header.frame_id;
+  karto::LaserRangeFinder* laser =
     karto::LaserRangeFinder::CreateLaserRangeFinder(
-    karto::LaserRangeFinder_Custom, karto::Name("Custom Described Lidar"));
+    karto::LaserRangeFinder_Custom, karto::Name(name.c_str()));
   laser->SetOffsetPose(karto::Pose2(laser_pose_.transform.translation.x,
     laser_pose_.transform.translation.y, mountingYaw));
   laser->SetMinimumRange(scan_.range_min);
@@ -102,7 +103,7 @@ karto::LaserRangeFinder* LaserAssistant::makeLaser(const double& mountingYaw)
   laser->SetMinimumAngle(scan_.angle_min);
   laser->SetMaximumAngle(scan_.angle_max);
   laser->SetAngularResolution(scan_.angle_increment);
-  
+
   bool is_360_lidar = false;
   const float angular_range = std::fabs(scan_.angle_max - scan_.angle_min);
   if (std::fabs(angular_range - 2.0 * M_PI) < (scan_.angle_increment - (std::numeric_limits<float>::epsilon() * 2.0f*M_PI))) {
@@ -151,7 +152,7 @@ bool LaserAssistant::isInverted(double& mountingYaw)
   laser_orient.header.stamp = scan_.header.stamp;
   laser_orient.header.frame_id = base_frame_;
   laser_orient = tf_->transform(laser_orient, frame_);
-  
+
   if (laser_orient.vector.z <= 0)
   {
     ROS_DEBUG("laser is mounted upside-down");
@@ -160,6 +161,36 @@ bool LaserAssistant::isInverted(double& mountingYaw)
 
   return false;
 };
+
+ros::Time LaserMetadata::getLastScanTime() const
+{
+  return last_scan_time;
+}
+
+karto::Pose2 LaserMetadata::getLastPose() const
+{
+  return last_pose;
+}
+
+void LaserMetadata::setLastScanTime(const ros::Time last_time_new)
+{
+  last_scan_time = last_time_new;
+}
+
+void LaserMetadata::setLastPose(const karto::Pose2 last_pose_new)
+{
+  last_pose = last_pose_new;
+}
+
+void LaserMetadata::isFirstMeasurement(const bool isIt)
+{
+  first_measurement = isIt;
+}
+
+bool LaserMetadata::isFirstMeasurement() const
+{
+  return first_measurement;
+}
 
 ScanHolder::ScanHolder(std::map<std::string, laser_utils::LaserMetadata>& lasers)
 : lasers_(lasers)

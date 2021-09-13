@@ -86,7 +86,7 @@ protected:
   karto::LocalizedRangeScan* addScan(karto::LaserRangeFinder* laser, PosedScan& scanWPose);
   bool updateMap();
   tf2::Stamped<tf2::Transform> setTransformFromPoses(const karto::Pose2& pose,
-    const karto::Pose2& karto_pose, const ros::Time& t, const bool& update_reprocessing_transform);
+    const karto::Pose2& karto_pose, const std_msgs::Header& header, const bool& update_reprocessing_transform);
   karto::LocalizedRangeScan* getLocalizedRangeScan(karto::LaserRangeFinder* laser,
     const sensor_msgs::LaserScan::ConstPtr& scan,
     karto::Pose2& karto_pose);
@@ -103,18 +103,19 @@ protected:
   std::unique_ptr<tf2_ros::Buffer> tf_;
   std::unique_ptr<tf2_ros::TransformListener> tfL_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tfB_;
-  std::unique_ptr<message_filters::Subscriber<sensor_msgs::LaserScan> > scan_filter_sub_;
-  std::unique_ptr<tf2_ros::MessageFilter<sensor_msgs::LaserScan> > scan_filter_;
+  std::vector<std::unique_ptr<message_filters::Subscriber<sensor_msgs::LaserScan> > > scan_filter_sub_;
+  std::vector<std::unique_ptr<tf2_ros::MessageFilter<sensor_msgs::LaserScan> > > scan_filter_;
   ros::Publisher sst_, sstm_;
   ros::ServiceServer ssMap_, ssPauseMeasurements_, ssSerialize_, ssDesserialize_;
 
   // Storage for ROS parameters
-  std::string odom_frame_, map_frame_, base_frame_, map_name_, scan_topic_;
+  std::vector<std::string> scan_topic_;
+  std::string odom_frame_, map_frame_, base_frame_, map_name_;
   ros::Duration transform_timeout_, tf_buffer_dur_, minimum_time_interval_;
   int throttle_scans_;
 
   double resolution_;
-  bool first_measurement_, enable_interactive_mode_;
+  bool enable_interactive_mode_;
 
   // Book keeping
   std::unique_ptr<mapper_utils::SMapper> smapper_;
