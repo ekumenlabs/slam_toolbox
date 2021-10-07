@@ -1,1 +1,5 @@
 snap_ws/*
+
+build/
+log/*
+install/*
