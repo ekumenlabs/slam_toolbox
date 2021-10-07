@@ -28,7 +28,7 @@ include_directories(include ${catkin_INCLUDE_DIRS}
 add_definitions(${EIGEN3_DEFINITIONS})
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
-add_library(kartoSlamToolbox SHARED src/Karto.cpp src/Mapper.cpp)
+add_library(kartoSlamToolbox SHARED src/Karto.cpp src/Mapper.cpp src/M3RScanMatcher.cpp)
 ament_target_dependencies(kartoSlamToolbox ${dependencies})
 target_link_libraries(kartoSlamToolbox ${Boost_LIBRARIES} ${TBB_LIBRARIES})
 
@@ -46,3 +46,6 @@ ament_export_libraries(kartoSlamToolbox)
 ament_export_include_directories(include)
 ament_export_dependencies(${dependencies})
 ament_package()
+
+enable_testing()
+add_subdirectory(m3rsm_test)
