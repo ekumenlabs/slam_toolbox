@@ -79,6 +79,31 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
 }
 
 /*****************************************************************************/
+/**
+  * The are implementation notes from Camilo OCT 21
+  * 
+  * First step
+    * Get the occupancy probability for each cell in the map. This solution is based
+    * on the Log-Odds rather than the Bayesian filter, only for computation performance
+    * Initialization for this elements should be made before we start the following loop:
+      * Gather the sensor data. 
+      * Inverse measurement model (Tranforming scan to measure occupancy belief map)
+      * Log-Odds calculation for the current reading and update the grid or map.
+      * Probability map calculation and update for current reading (This is done for the cells)\
+  * 
+  * NOTE
+  * Once we get the probabilities we can calculate the entropy of each grid cell. I am assuming
+  * this should be done inside the loop as we want to calculate this entropy at each time.  
+
+  * Log odds assume values from −∞ to ∞. The Bayes filter for updating beliefs in
+  * log odds representation is computationally elegant. It avoids truncation problems that
+  * arise for probabilities close to 0 or 1.
+  * 
+  * 
+  * We are using std::vector !!
+/*****************************************************************************/
+
+/*****************************************************************************/
 void LifelongSlamToolbox::laserCallback(
   sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
 /*****************************************************************************/
