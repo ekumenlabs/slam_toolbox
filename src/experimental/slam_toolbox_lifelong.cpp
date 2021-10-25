@@ -18,7 +18,11 @@
 
 #include <algorithm>
 #include <memory>
+#include <vector>
+#include <math.h>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
+
+#define PI 3.14159265
 
 namespace slam_toolbox
 {
@@ -76,6 +80,8 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
 
   // in lifelong mode, we cannot have interactive mode enabled
   enable_interactive_mode_ = false;
+
+  scannerTest();
 }
 
 /*****************************************************************************/
@@ -101,7 +107,86 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
   * 
   * 
   * We are using std::vector !!
+  * 
+  * 
+  * 
+  * According tothe the last meeting we handle, I will start with a prrof of concept
+  * Create a grid
+  * Calculate the scan position (WRO a given cell). Consider where is my initial cell 
+  * Calculate the probability of seing an grid given a set of measurements
+  * Create the histogram with Algrotihm 1
 /*****************************************************************************/
+
+/*****************************************************************************/
+/*******************************Implementation********************************/
+  
+void LifelongSlamToolbox::scannerTest()
+{
+  RCLCPP_WARN(get_logger(), "<-------- Scanner Test -------->");
+ 
+  float resolution = 0.5f; // Cell resolution - 1 meter
+  float map_dist = 20.0f; // Total map distance
+  
+  int number_cells = map_dist / resolution;
+  std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
+  for (int i=0; i<number_cells; ++i)
+  {
+    grid[i].resize(number_cells); // 20 meters in X dimension
+    for (int j=0; j<number_cells; ++j)
+    {
+      grid[i][j] = 0;
+    }
+  }
+
+  // I will have 5 lasers for each reading (Located at 0, +-45, +-90)
+  // std::vector<float> robot_pose{11.0f, 7.0f, 0.0f};
+  std::vector<float> robot_pose{11.0f, 7.0f, -PI/2};
+
+  // std::vector<int> grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
+
+  // Maximum sensor range is 5 meters
+  // std::vector<float> ranges{5.0f, 2.75f, 5.0f, 5.0f, 3.4f};
+  std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f};
+  // std::vector<float> angles{-50.0f, -25.0f, 0.0f, 25.0f, 50.0f};
+  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+
+  // Angles will be -50, -25, 0, 25, 50
+  // +-50 = +-0.87266 : +-25 = +-0.43633
+
+  // Current yaw + beam angle
+  // -PI/2 (-1.570795) - 0.87266 = 2.44345 (-50 degrees)
+  for (int i=0; i<ranges.size(); ++i)
+  {
+    std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
+    std::vector<int> grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
+  }
+}
+
+std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float resolution)
+{
+  int x_cell = ceil((1 / resolution) * x); 
+  int y_cell = ceil((1 / resolution) * y); 
+
+  return {x_cell, y_cell};
+}
+
+std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float distance, float angle)
+{
+  // This one is working OK
+  float angle_r = atan2(sin(robot_pose[2] + angle), cos(robot_pose[2] + angle));
+  float x_occ = distance * cos(angle_r) + robot_pose[0]; // This is X
+  float y_occ = -distance * sin(angle_r) + robot_pose[1]; // This is Y
+
+  std::vector<int> grid_pos = getGridPosition(x_occ, y_occ, 0.5f);
+
+  std::cout << grid_pos[0] << ", " << grid_pos[1] << std::endl;
+  std::cout << x_occ << ", " << y_occ << std::endl;
+  std::cout << " ---------------------- " << std::endl;
+
+  return {x_occ, y_occ};
+}
+/*****************************************************************************/
+
 
 /*****************************************************************************/
 void LifelongSlamToolbox::laserCallback(

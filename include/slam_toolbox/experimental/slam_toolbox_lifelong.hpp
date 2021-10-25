@@ -66,6 +66,14 @@ protected:
   void updateScoresSlamGraph(const double & score, Vertex<LocalizedRangeScan> * vertex);
   void checkIsNotNormalized(const double & value);
 
+  /*****************************************************************************/
+  /*******************************Implementation********************************/
+  void scannerTest();
+  std::vector<int> getGridPosition(float x, float y, float resolution);
+  std::vector<float> getLaserHit(std::vector<float> const& robot_pose, float distance, float angle); 
+  /*****************************************************************************/
+
+
   bool use_tree_;
   double iou_thresh_;
   double removal_score_;
