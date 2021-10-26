@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 #include <math.h>
+#include <stdlib.h>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
 
 #define PI 3.14159265
@@ -139,31 +140,57 @@ void LifelongSlamToolbox::scannerTest()
   }
 
   // I will have 5 lasers for each reading (Located at 0, +-45, +-90)
-  // std::vector<float> robot_pose{11.0f, 7.0f, 0.0f};
   std::vector<float> robot_pose{11.0f, 7.0f, -PI/2};
 
-  // std::vector<int> grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
-
+  // This is the first one
+  std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
   // Maximum sensor range is 5 meters
-  // std::vector<float> ranges{5.0f, 2.75f, 5.0f, 5.0f, 3.4f};
   std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f};
-  // std::vector<float> angles{-50.0f, -25.0f, 0.0f, 25.0f, 50.0f};
   std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
-  // Angles will be -50, -25, 0, 25, 50
-  // +-50 = +-0.87266 : +-25 = +-0.43633
+  // Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
 
-  // Current yaw + beam angle
-  // -PI/2 (-1.570795) - 0.87266 = 2.44345 (-50 degrees)
+  // Current yaw + beam angle: -PI/2 (-1.570795) - 0.87266 = 2.44345 (-50 degrees)
   for (int i=0; i<ranges.size(); ++i)
   {
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
-    std::vector<int> grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
+    std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
+    // robot_grid_pos[0] // X1    // robot_grid_pos[1] // Y1
+    // final_grid_pos[0] // X2    // final_grid_pos[1] // Y2
+    
+    std::vector<int> res_x;
+    std::vector<int> res_y;
+    std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
+
+    res_x = res_pair.first;
+    res_y = res_pair.second;
   }
+}
+
+float LifelongSlamToolbox::calculateProbability(float range)
+{
+  /* 
+    Calculates the probability of a cell being observed by a given measurement
+  */
+  float max_range = 5.0f;
+  float lambda = 0.285f;
+  float nu = 1.0f / lambda;
+  if (range <= max_range)
+  {
+    return nu*lambda*exp(-lambda*range);
+  }
+  return 0.0f;
+
+  /*
+    std::cout << calculateProbability(5.0f) << std::endl;
+    std::cout << calculateProbability(2.5f) << std::endl;
+    std::cout << calculateProbability(0.0f) << std::endl;
+  */
 }
 
 std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float resolution)
 {
+  // Map the distance into the grid
   int x_cell = ceil((1 / resolution) * x); 
   int y_cell = ceil((1 / resolution) * y); 
 
@@ -172,7 +199,7 @@ std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float re
 
 std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float distance, float angle)
 {
-  // This one is working OK
+  // Returns the distance where the laser beam hits something 
   float angle_r = atan2(sin(robot_pose[2] + angle), cos(robot_pose[2] + angle));
   float x_occ = distance * cos(angle_r) + robot_pose[0]; // This is X
   float y_occ = -distance * sin(angle_r) + robot_pose[1]; // This is Y
@@ -184,6 +211,90 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
   std::cout << " ---------------------- " << std::endl;
 
   return {x_occ, y_occ};
+}
+
+
+std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x1, int y1, int x2, int y2)
+{
+  // This one is working
+	std::vector<int> x_bres;
+	std::vector<int> y_bres;
+
+	int x = x1;
+	int y = y1;
+	
+	int delta_x = abs(x2 - x1);
+	int delta_y = abs(y2 - y1);
+
+  int s_x = getSign(x1, x2);
+  int s_y = getSign(y1, y2);
+  bool interchange = false;
+
+	if (delta_y > delta_x)
+  {
+    int temp = delta_x;
+    delta_x = delta_y;
+    delta_y = temp;    
+		interchange = true;
+  }
+  else
+  {
+		interchange = false;
+  }
+
+  int a_res = 2 * delta_y;
+	int b_res = 2 * (delta_y - delta_x);
+	int e_res = (2 * delta_y) - delta_x;
+
+  x_bres.push_back(x);
+  y_bres.push_back(y);
+
+  for (int i = 1; i < delta_x; ++i) 
+  {
+    if (e_res < 0)
+    {
+      if (interchange)
+      {
+        y += s_y;
+      }
+      else
+      {
+        x += s_x;
+      }
+      e_res += a_res;
+    }
+    else 
+    {
+      y += s_y;
+      x += s_x;
+      e_res += b_res;
+    }
+    x_bres.push_back(x);
+    y_bres.push_back(y);
+  }
+  return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
+
+  /*
+    std::vector<int> res_x;
+    std::vector<int> res_y;
+    std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(-1, -4, 3, 2);
+
+    res_x = res_pair.first;
+    res_y = res_pair.second;
+    for (int i=0; i<res_x.size(); ++i)
+    {
+      std::cout << res_x[i] << ", " << res_y[i] << std::endl;
+    }
+  */
+}
+
+int LifelongSlamToolbox::getSign(int n1, int n2)
+{
+  int difference = n2 - n1;
+  
+  if (difference == 0) { return 0; }
+  else if (difference < 0) { return -1; }
+  else { return 1; }
 }
 /*****************************************************************************/
 

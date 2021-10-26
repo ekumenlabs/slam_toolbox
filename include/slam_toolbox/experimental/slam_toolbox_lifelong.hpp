@@ -70,7 +70,12 @@ protected:
   /*******************************Implementation********************************/
   void scannerTest();
   std::vector<int> getGridPosition(float x, float y, float resolution);
-  std::vector<float> getLaserHit(std::vector<float> const& robot_pose, float distance, float angle); 
+  std::vector<float> getLaserHit(std::vector<float> const& robot_pose, float distance, float angle);
+  std::pair<std::vector<int>, std::vector<int>> Bresenham(int x1, int y1, int x2, int y2);
+  int getSign(int x1, int x2);
+  float calculateProbability(float range);
+
+
   /*****************************************************************************/
 
 
