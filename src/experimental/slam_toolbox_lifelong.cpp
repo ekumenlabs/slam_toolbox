@@ -140,10 +140,11 @@ void LifelongSlamToolbox::scannerTest()
   }
 
   // I will have 5 lasers for each reading (Located at 0, +-45, +-90)
-  std::vector<float> robot_pose{11.0f, 7.0f, -PI/2};
+  std::vector<float> robot_pose{10.0f, 7.0f, -PI/2};
 
   // This is the first one
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
+
   // Maximum sensor range is 5 meters
   std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f};
   std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
@@ -153,18 +154,102 @@ void LifelongSlamToolbox::scannerTest()
   // Current yaw + beam angle: -PI/2 (-1.570795) - 0.87266 = 2.44345 (-50 degrees)
   for (int i=0; i<ranges.size(); ++i)
   {
+    std::cout << "........ New laser ........" << std::endl;
+
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
     // robot_grid_pos[0] // X1    // robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2    // final_grid_pos[1] // Y2
-    
-    std::vector<int> res_x;
-    std::vector<int> res_y;
+    std::vector<int> cells_x, cells_y;
     std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
 
-    res_x = res_pair.first;
-    res_y = res_pair.second;
+    // Cells visited by this laser beam
+    cells_x = res_pair.first;
+    cells_y = res_pair.second;
+
+    // Laser beam discretization
+    int samples = 100;
+    float step = ranges[i] / samples;
+    float current_dis = 0.0f;
+
+    // Discretization of the laser beam
+    std::vector<float> x_coord, y_coord;
+    x_coord.reserve(samples + 1);
+    y_coord.reserve(samples + 1);
+
+    while(current_dis < (ranges[i] + step))
+    {
+      // This loop containts the coordinates for each laser beam
+      float x_p = current_dis * cos(angles[i]);
+      float y_p = current_dis * sin(angles[i]);
+      x_coord.emplace_back(x_p);
+      y_coord.emplace_back(y_p);
+      current_dis += step;
+    }
+    // I would need to validate if this works for all the quadrants
+    // std::cout << limit_x << ", " << limit_y << std::endl;
+    // std::cout << limit_x + resolution << ", " << limit_y << std::endl;
+    // std::cout << limit_x << ", " << limit_y + resolution<< std::endl;
+    // std::cout << limit_x + resolution << ", " << limit_y + resolution << std::endl;
+
+    // Move alongside all the cells that the laser beam hits
+    for (int i = 0; i < cells_x.size(); ++i)
+    {
+      std::cout << cells_x[i] << ", " << cells_y[i] << std::endl;
+      float limit_x = cells_x[i] * resolution;
+      float limit_y = cells_y[i] * resolution;
+
+      for (int j = 0; j < x_coord.size(); ++j)
+      {
+        // Adding the robot position to the laser beam reading
+        float read_x = x_coord[i] + robot_pose[0];
+        float read_y = y_coord[i] + robot_pose[1];
+        
+        // Distances of the laser hit
+        if ((abs(read_x) > abs(limit_x)) && 
+            (abs(read_x) < abs(limit_x + resolution)) && 
+            (abs(read_y) > abs(limit_y)) && 
+            (abs(read_y) < abs(limit_y + resolution)))
+        {
+          ;
+        }
+      }
+    }
+
+    // 
+
+    // To discretize a beam
+
+    // Discretize the line
+    // Punto inicial es la posicion del robot 
+    // Punto final es la lectura del laser 
+
+
+    // I could get the distance for each cell
+    
+    // As an initial approach I could use the euclidean distance to a given cell
+
+    // I need to calculate 
+    /*
+      d1 -> Distance from the robot position
+    */
+
   }
+}
+
+float LifelongSlamToolbox::calculateSlope(float x_1, float y_1, float x_2, float y_2)
+{
+  // Calculates the scope of a given laser beam based on its coordinates
+  return  (y_2 - y_1) / (x_2 - x_1);
+}
+
+std::vector<float> LifelongSlamToolbox::calculateBeamCoordinates(float x_1, float y_1, float slope, float time)
+{
+  // Coeficients 
+  // Time step 
+  std::cout << slope << std::endl;
+
+
 }
 
 float LifelongSlamToolbox::calculateProbability(float range)
@@ -206,28 +291,28 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
 
   std::vector<int> grid_pos = getGridPosition(x_occ, y_occ, 0.5f);
 
-  std::cout << grid_pos[0] << ", " << grid_pos[1] << std::endl;
-  std::cout << x_occ << ", " << y_occ << std::endl;
-  std::cout << " ---------------------- " << std::endl;
+  // std::cout << grid_pos[0] << ", " << grid_pos[1] << std::endl;
+  // std::cout << x_occ << ", " << y_occ << std::endl;
+  // std::cout << " ---------------------- " << std::endl;
 
   return {x_occ, y_occ};
 }
 
 
-std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x1, int y1, int x2, int y2)
+std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x_1, int y_1, int x_2, int y_2)
 {
   // This one is working
 	std::vector<int> x_bres;
 	std::vector<int> y_bres;
 
-	int x = x1;
-	int y = y1;
+	int x = x_1;
+	int y = y_1;
 	
-	int delta_x = abs(x2 - x1);
-	int delta_y = abs(y2 - y1);
+	int delta_x = abs(x_2 - x_1);
+	int delta_y = abs(y_2 - y_1);
 
-  int s_x = getSign(x1, x2);
-  int s_y = getSign(y1, y2);
+  int s_x = getSign(x_1, x_2);
+  int s_y = getSign(y_1, y_2);
   bool interchange = false;
 
 	if (delta_y > delta_x)
@@ -288,9 +373,10 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
   */
 }
 
-int LifelongSlamToolbox::getSign(int n1, int n2)
+int LifelongSlamToolbox::getSign(int n_1, int n_2)
 {
-  int difference = n2 - n1;
+  // Returns the sign of an operation, used for Bresenham algorithm
+  int difference = n_2 - n_1;
   
   if (difference == 0) { return 0; }
   else if (difference < 0) { return -1; }
