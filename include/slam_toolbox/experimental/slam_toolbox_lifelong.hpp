@@ -76,6 +76,8 @@ protected:
   float calculateProbability(float range);
   std::vector<float> calculateBeamCoordinates(float x_1, float y_1, float slope, float time);
   float calculateSlope(float x_1, float y_1, float x_2, float y_2);
+  float calculateDistance(float x_1, float y_1, float x_2, float y_2);
+
 
 
   /*****************************************************************************/
