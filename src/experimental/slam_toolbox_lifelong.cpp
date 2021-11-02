@@ -160,20 +160,23 @@ void LifelongSlamToolbox::scannerTest()
     std::cout << "........ New laser ........" << std::endl;
     std::cout << "Distance: " << ranges[i] << ", Angle: " << angles[i] << std::endl;
 
+    // Laser continuous distance
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
+    // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
-    std::cout << "Laser end: " << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
+
     std::vector<int> cells_x, cells_y;
     std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
-    /**
-     * Need to append here the last point, the algorithm is not doing it
-    */
 
     // Cells visited by this laser beam
     cells_x = res_pair.first;
     cells_y = res_pair.second;
+
+    // Adding last hit cell to the set 
+    cells_x.push_back(final_grid_pos[0]);
+    cells_y.push_back(final_grid_pos[1]);
 
     // Laser beam discretization
     int samples = 100;
@@ -203,6 +206,10 @@ void LifelongSlamToolbox::scannerTest()
     initial_point[0] = 0.0f; 
     initial_point[1] = 0.0f;
 
+    std::cout << "Size: " << x_coord.size() << std::endl;
+    std::cout << "Value 1: " << x_coord[91] << ", " << y_coord[91] << std::endl;      
+    std::cout << "Value 2: " << x_coord[100] << ", " << y_coord[100] << std::endl;      
+
     // Move alongside all the cells that the laser beam hits
     for (int i = 0; i < cells_x.size(); ++i)
     {
@@ -215,7 +222,7 @@ void LifelongSlamToolbox::scannerTest()
       
       std::cout << "Initial point: " << initial_point[0] << ", " << initial_point[1] << std::endl;      
       std::cout << "starting at: " << count_idx << std::endl;
-      
+
       for (int j = count_idx; j < x_coord.size() + 1; ++j)
       {
         // Adding the robot position to the laser beam reading - Shift X and Y
@@ -224,7 +231,7 @@ void LifelongSlamToolbox::scannerTest()
 
         // std::cout << "Limit X: " << limit_x << ", " << limit_x + resolution << std::endl;
         // std::cout << "Limit Y: " << limit_y << ", " << limit_y + resolution << std::endl;
-        std::cout << "Count: " << j << std::endl;
+        // std::cout << "Count: " << j << std::endl;
 
         // Evaluate to what cell corresponds the current reading
         if (((abs(read_x) >= abs(limit_x)) && (abs(read_x) <= abs(limit_x + resolution))) &&
@@ -256,7 +263,6 @@ void LifelongSlamToolbox::scannerTest()
 
     }
     std::cout << "*************************" << std::endl;
-
   }
 }
 
@@ -306,8 +312,6 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
   float angle_r = atan2(sin(robot_pose[2] + angle), cos(robot_pose[2] + angle));
   float x_occ = distance * cos(angle_r) + robot_pose[0]; // This is X
   float y_occ = -distance * sin(angle_r) + robot_pose[1]; // This is Y
-
-  std::vector<int> grid_pos = getGridPosition(x_occ, y_occ, 0.5f);
 
   return {x_occ, y_occ};
 }
