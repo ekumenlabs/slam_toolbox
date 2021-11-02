@@ -68,20 +68,14 @@ protected:
 
   /*****************************************************************************/
   /*******************************Implementation********************************/
-  void scannerTest();
   std::vector<int> getGridPosition(float x, float y, float resolution);
   std::vector<float> getLaserHit(std::vector<float> const& robot_pose, float distance, float angle);
   std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
   int getSign(int n_1, int n_2);
   float calculateProbability(float range);
-  std::vector<float> calculateBeamCoordinates(float x_1, float y_1, float slope, float time);
-  float calculateSlope(float x_1, float y_1, float x_2, float y_2);
   float calculateDistance(float x_1, float y_1, float x_2, float y_2);
-
-
-
+  void scannerTest();
   /*****************************************************************************/
-
 
   bool use_tree_;
   double iou_thresh_;
