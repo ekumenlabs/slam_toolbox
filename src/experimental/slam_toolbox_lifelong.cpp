@@ -140,7 +140,7 @@ void LifelongSlamToolbox::scannerTest()
   }
 
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
-  std::vector<float> robot_pose{5.5f, 6.0f, -PI/2};
+  std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
   // std::vector<float> robot_pose{5.5f, 6.0f, PI/2};
   // std::vector<float> robot_pose{5.5f, 6.0f, 0.0f};
 
@@ -148,8 +148,12 @@ void LifelongSlamToolbox::scannerTest()
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
   std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
+  // 3.0 to 3.5 would be the range
+  float probability1 = calculateProbability(3.15);
+  std::cout << "Probability: " << probability1 << std::endl;
+
   // Creating the laser scan with 5 beams ------- Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
-  std::vector<float> ranges{2.75f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
+  std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
   std::vector<float> angles{0.0f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.785398f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
@@ -179,8 +183,15 @@ void LifelongSlamToolbox::scannerTest()
     cells_x.push_back(final_grid_pos[0]); // Here make the change
     cells_y.push_back(final_grid_pos[1]);
 
+    std::cout << "Cells" << std::endl;
+    for (int c = 0; c < cells_x.size(); ++c) // One reading only
+    {
+      std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+    }
+    std::cout << "End of cells" << std::endl;
+
     // Laser beam discretization
-    int samples = 200;
+    int samples = 300;
     float step = ranges[i] / samples;
     float current_dis = 0.0f;
 
@@ -274,7 +285,7 @@ void LifelongSlamToolbox::scannerTest()
       // From the start of the cell to the end - This is an approximation - From the robot pose
       float distance = calculateDistance(initial_point[0], initial_point[1], final_point[0], final_point[1]);
       dist_carry += distance;
-      // std::cout << "Distance: " << distance << ", " << dist_carry << std::endl;
+      std::cout << "Distance: " << distance << ", " << dist_carry << std::endl;
       // Before moving into the next cell we can calculate the interal here
       // We have the initial point and the final point so we can perform this calculation
       float probability = calculateProbability(ranges[i]);  // This is the right place for calculating this
@@ -285,10 +296,14 @@ void LifelongSlamToolbox::scannerTest()
       
       std::cout << "Distances: " << d1 << ", " << d2 << std::endl;
 
+      // Only one of them applies - Posibilities
       // Unobserved
       float unobserved = d1 * probability; 
       // Occupied
-      float occupied = probability * (d2 - d1);
+      float occupied = probability * (d2 - d1); // A change on this one is required
+      // Get the point, if not maximum add resolution to the initial point 
+      // I can do a ray tracing with the whole range 
+      // I have the distance where this is cut so I cand o some mathematical stuff
       // Free
       float free = probability * (5.0 - d2);  // Maximum range
 
@@ -359,17 +374,17 @@ std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float re
   return {x_cell, y_cell};
 }
 
-std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float distance, float angle)
+std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float range, float angle)
 {
   /* 
     Returns the distance where the laser beam hits something 
-    This is done in the global coordinates 
+    Rigid Body Trasnformation from the global to the sensor frame 
   */ 
-  float angle_r = atan2(sin(robot_pose[2] + angle), cos(robot_pose[2] + angle));
-  float x_occ = distance * cos(angle_r) + robot_pose[0]; // This is X
-  float y_occ = -distance * sin(angle_r) + robot_pose[1]; // This is Y
 
-  return {x_occ, y_occ};
+  float x_tf = (range * cos(robot_pose[2]) * cos(angle)) - (range * sin(robot_pose[2]) * sin(angle)) + robot_pose[0];
+  float y_tf = (range * sin(robot_pose[2]) * cos(angle)) + (range * cos(robot_pose[2]) * sin(angle)) + robot_pose[1];
+
+  return {x_tf, y_tf};
 }
 
 std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x_1, int y_1, int x_2, int y_2)
