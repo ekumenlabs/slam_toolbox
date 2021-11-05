@@ -504,19 +504,27 @@ float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, fl
   return sqrt(diff_x*diff_x + diff_y*diff_y);
 }
 
-float LifelongSlamToolbox::calculateProbability(float range)
+float LifelongSlamToolbox::calculateProbability(float range_1, float range_2)
 {
   /*
     Calculates the probability of a cell being observed by a given measurement
+    This is the new function that we should integrate (If measurement is greater than max range so calculate the whole value)
+    range_1 lower limit
+    range_2 upper limit
   */
   float max_range = 5.0f;
   float lambda = 0.285f;
   float nu = 1.0f / lambda;
-  if (range <= max_range)
+
+  // When measurement is greater we need to calculate the whole sumatory after this point it will no add anything
+  if (range_2 > max_range) // Ternarr would be cleaner
   {
-    return nu*lambda*exp(-lambda*range);
+      range_2 = max_range;
   }
-  return 0.0f;
+  // https://www.wolframalpha.com/input/?i2d=true&i=Integrate%5Bk*Power%5Be%2C-c*x%5D%2C%7Bx%2Ca%2Cb%7D%5D
+  return (nu * lambda)*((exp(-lambda*range_1) - exp(-lambda*range_2)) / lambda);  
+
+  // return 0.0f;
 }
 
 std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float resolution)

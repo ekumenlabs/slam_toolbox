@@ -73,7 +73,7 @@ protected:
   std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
   std::vector<float> calculateIntersection(std::vector<float> laser_start, std::vector<float> laser_end, std::vector<float> cell_start, std::vector<float> cell_end);
   int getSign(int n_1, int n_2);
-  float calculateProbability(float range);
+  float calculateProbability(float range_1, float range_2);
   float calculateDistance(float x_1, float y_1, float x_2, float y_2);
   void scannerTest();
   std::vector<float> getCellPosition(std::vector<int> grid_cell, float resolution);
