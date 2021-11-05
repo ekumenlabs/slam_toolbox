@@ -88,46 +88,46 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
 /*****************************************************************************/
 /**
   * The are implementation notes from Camilo OCT 21
-  * 
+  *
   * First step
     * Get the occupancy probability for each cell in the map. This solution is based
     * on the Log-Odds rather than the Bayesian filter, only for computation performance
     * Initialization for this elements should be made before we start the following loop:
-      * Gather the sensor data. 
+      * Gather the sensor data.
       * Inverse measurement model (Tranforming scan to measure occupancy belief map)
       * Log-Odds calculation for the current reading and update the grid or map.
       * Probability map calculation and update for current reading (This is done for the cells)\
-  * 
+  *
   * NOTE
   * Once we get the probabilities we can calculate the entropy of each grid cell. I am assuming
-  * this should be done inside the loop as we want to calculate this entropy at each time.  
+  * this should be done inside the loop as we want to calculate this entropy at each time.
 
   * Log odds assume values from −∞ to ∞. The Bayes filter for updating beliefs in
   * log odds representation is computationally elegant. It avoids truncation problems that
   * arise for probabilities close to 0 or 1.
-  * 
-  * 
+  *
+  *
   * We are using std::vector !!
-  * 
-  * 
-  * 
+  *
+  *
+  *
   * According tothe the last meeting we handle, I will start with a prrof of concept
   * Create a grid
-  * Calculate the scan position (WRO a given cell). Consider where is my initial cell 
+  * Calculate the scan position (WRO a given cell). Consider where is my initial cell
   * Calculate the probability of seing an grid given a set of measurements
   * Create the histogram with Algrotihm 1
 /*****************************************************************************/
 
 /*****************************************************************************/
 /*******************************Implementation********************************/
-  
+
 void LifelongSlamToolbox::scannerTest()
 {
   RCLCPP_WARN(get_logger(), "<-------- Scanner Test -------->");
- 
+
   float resolution = 0.5f; // Cell resolution - 1 meter
   float map_dist = 20.0f; // Total map distance
-  
+
   int number_cells = map_dist / resolution;
   std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
   for (int i=0; i<number_cells; ++i)
@@ -140,21 +140,22 @@ void LifelongSlamToolbox::scannerTest()
   }
 
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
+  // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
+  // std::vector<float> robot_pose{5.6f, 6.0f, PI/4};
   std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
-  // std::vector<float> robot_pose{5.5f, 6.0f, PI/2};
+  // std::vector<float> robot_pose{5.5f, 6.0f, -PI/4};
+  // std::vector<float> robot_pose{5.5f, 6.0f, -3*PI/4};
+  // -PI is an unhandled case
+  // std::vector<float> robot_pose{5.5f, 6.0f, PI};
   // std::vector<float> robot_pose{5.5f, 6.0f, 0.0f};
 
   // This is the initial point
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
   std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
-  // 3.0 to 3.5 would be the range
-  float probability1 = calculateProbability(3.15);
-  std::cout << "Probability: " << probability1 << std::endl;
-
   // Creating the laser scan with 5 beams ------- Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
   std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  std::vector<float> angles{0.0f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.785398f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
@@ -169,6 +170,12 @@ void LifelongSlamToolbox::scannerTest()
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
+    std::cout << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
+
+
+    std::vector<float> cell_pos = getCellPosition({11, 12}, resolution);
+    std::cout << cell_pos[0] << ", " << cell_pos[1] << std::endl;
+
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
 
@@ -179,16 +186,18 @@ void LifelongSlamToolbox::scannerTest()
     cells_x = res_pair.first;
     cells_y = res_pair.second;
 
-    // Adding last hit cell to the set 
+    // Adding last hit cell to the set
     cells_x.push_back(final_grid_pos[0]); // Here make the change
     cells_y.push_back(final_grid_pos[1]);
 
-    std::cout << "Cells" << std::endl;
-    for (int c = 0; c < cells_x.size(); ++c) // One reading only
-    {
-      std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
-    }
-    std::cout << "End of cells" << std::endl;
+    // std::cout << "Cells" << std::endl;
+    // for (int c = 0; c < cells_x.size(); ++c) // One reading only
+    // {
+    //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+    // }
+    // std::cout << "End of cells" << std::endl;
+
+    // Discretization is no longer required
 
     // Laser beam discretization
     int samples = 300;
@@ -210,38 +219,149 @@ void LifelongSlamToolbox::scannerTest()
       current_dis += step;
     }
 
+
     int count_idx = 0;
     float dist_carry = 0.0f;
 
     std::vector<float> initial_point(2), final_point(2);
-      
-    initial_point[0] = 0.0f; 
+
+    initial_point[0] = 0.0f;
     initial_point[1] = 0.0f;
 
-    // Initial and final points 
+    // Initial and final points
     std::pair<std::vector<float>, std::vector<float>> initial_pts, final_pts;
-    
+
     // initial_pts.first.push_back(initial_point[0]);
     // initial_pts.second.push_back(initial_point[1]);
 
     // Move alongside all the cells that the laser beam hits
+    std::cout << " +++++++++++++ " << std::endl;
+
     for (int j = 0; j < cells_x.size(); ++j)
     {
-      bool first = true;
+      // Cells visutalization
+      std::cout << cells_x[j] << ", " << cells_y[j] << std::endl;
 
-      // Converting the cell into distance (Global) 
+      // Converting the cell into distance
       float limit_x = cells_x[j] * resolution;
       float limit_y = cells_y[j] * resolution;
+      
+      std::vector<float> initial_x {limit_x, limit_x, limit_x + resolution, limit_x + resolution};
+      std::vector<float> initial_y {limit_y, limit_y, limit_y + resolution, limit_y + resolution};
 
-      std::cout << "******** New cell ********" << std::endl;
-      std::cout << "Starting at: " << count_idx << std::endl;
+      std::vector<float> final_x {limit_x + resolution, limit_x, limit_x + resolution, limit_x};
+      std::vector<float> final_y {limit_y, limit_y + resolution, limit_y, limit_y + resolution};
 
-      for (int k = count_idx; k < x_coord.size(); ++k)
+      float min_x = limit_x;
+      float max_x = limit_x + resolution;
+      float min_y = limit_y;
+      float max_y = limit_y + resolution;
+
+      if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
       {
-        // Adding the robot position to the laser beam reading - Shift X and Y
-        float read_x = x_coord[k] + robot_pose[0];
-        float read_y = y_coord[k] + robot_pose[1];
+        std::cout << "1 " << std::endl;
+
+        // X minor and Y greater. WRO final points
+        initial_x[2] = limit_x - resolution;
+        initial_x[3] = limit_x - resolution;
         
+        final_x[0] = limit_x - resolution;
+        final_x[2] = limit_x - resolution;
+
+        min_x = limit_x - resolution;
+        max_x = limit_x;
+      }
+
+      if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+      {
+        std::cout << "2 " << std::endl;
+
+        // X greater and Y minor. WRO final points
+        initial_y[2] = limit_y - resolution;
+        initial_y[3] = limit_y - resolution;
+
+        final_y[1] = limit_y - resolution;
+        final_y[3] = limit_y - resolution;
+
+        min_y = limit_y - resolution;
+        max_y = limit_y;
+      }
+
+      if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+      {
+        std::cout << "3 " << std::endl;
+
+        // X minor and Y minor. WRO final points
+        initial_x[2] = limit_x - resolution;
+        initial_x[3] = limit_x - resolution;
+        initial_y[2] = limit_y - resolution;
+        initial_y[3] = limit_y - resolution;
+
+        final_x[0] = limit_x - resolution;
+        final_x[2] = limit_x - resolution;
+        final_y[1] = limit_y - resolution;
+        final_y[3] = limit_y - resolution;
+
+        min_x = limit_x - resolution;
+        max_x = limit_x;
+        min_y = limit_y - resolution;
+        max_y = limit_y;
+      }
+
+      for (int k = 0; k < 4; ++k)
+      {
+        // std::cout << "Points: " << initial_x[k] << ", " << initial_y[k] << ", " << final_x[k] << ", " << final_y[k] << std::endl;
+        std::vector<float> intersection = calculateIntersection(robot_pose, laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
+        if(intersection.size() != 0)
+        {
+          if ((abs(intersection[0]) >= abs(min_x)) && 
+            (abs(intersection[0]) <= abs(max_x)) && 
+            (abs(intersection[1]) >= abs(min_y)) &&
+            (abs(intersection[1]) <= abs(max_y))) 
+          {
+            std::cout << "Interception at: " << intersection[0] << ", " << intersection[1] << std::endl;
+          }
+        }
+        else
+        {
+          std::cout << "No interception " << std::endl;
+        }
+      }
+
+      // Current cell limits
+      // float inf_x = limit_x;
+      // float sup_x = limit_x + resolution;
+      // float inf_y = limit_y;
+      // float sup_y = limit_y + resolution;
+
+      // // // I need to transform that point
+      // std::vector<float> res = calculateIntersection(robot_pose, laser_grid, {5.5f, 6.5f}, {6.0f, 6.5f});
+
+      // if(res.size() != 0)
+      // {
+      //   std::cout << "Intercept" << std::endl;
+      //   std::cout << res[0] << ", " << res[1] << std::endl;
+      // }
+      std::cout << " +++++++++++++ " << std::endl;
+
+      // std::cout << limit_x << ", " << limit_y << std::endl;
+      // std::cout << limit_x + resolution << ", " << limit_y << std::endl;
+      // std::cout << limit_x << ", " << limit_y + resolution << std::endl;
+      // std::cout << limit_x + resolution<< ", " << limit_y + resolution << std::endl;
+
+
+      // std::cout << "******** New cell ********" << std::endl;
+      // std::cout << "Starting at: " << count_idx << std::endl;
+
+      // for (int k = count_idx; k < x_coord.size(); ++k)
+      // {
+      //   // Adding the robot position to the laser beam reading - Shift X and Y
+      //   float read_x = x_coord[k] + robot_pose[0];
+      //   float read_y = y_coord[k] + robot_pose[1];
+
+        // float x_tf = (range * cos(robot_pose[2]) * cos(angle)) - (range * sin(robot_pose[2]) * sin(angle)) + robot_pose[0];
+        // float y_tf = (range * sin(robot_pose[2]) * cos(angle)) + (range * cos(robot_pose[2]) * sin(angle)) + robot_pose[1];
+
         // // std::cout << "Reading x: " << abs(read_x) << ", Reading y: " << abs(read_y) << std::endl;
         // std::cout << "Limit X: " << abs(limit_x) - 5.5f << ", " << abs(limit_x + resolution) - 5.5f << std::endl;
         // std::cout << "Limit Y: " << abs(limit_y) - 6.0f << ", " << abs(limit_y + resolution) - 6.0f << std::endl;
@@ -260,60 +380,60 @@ void LifelongSlamToolbox::scannerTest()
         // }
 
         // Evaluate to what cell corresponds the current reading
-        if (((abs(read_x) >= abs(limit_x)) && (abs(read_x) <= abs(limit_x + resolution))) &&
-            ((abs(read_y) >= abs(limit_y)) && (abs(read_y) <= abs(limit_y + resolution))))
-        {
-          if (first)
-          {
-            // First reading inside a cell will be the initial point
-            // std::cout << "True at: " << x_coord[j] << "," << y_coord[j] << std::endl;  
-            initial_point[0] = x_coord[k];
-            initial_point[1] = y_coord[k]; 
-            // std::cout << "Initial point: " << initial_point[0] << ", " << initial_point[1] << std::endl;  
-            initial_pts.first.push_back(initial_point[0]);
-            initial_pts.second.push_back(initial_point[1]);
-            first = false;    
-          }
-          final_point[0] = x_coord[k]; 
-          final_point[1] = y_coord[k];
-          ++count_idx;
-        }
-      }
-      final_pts.first.push_back(final_point[0]);
-      final_pts.second.push_back(final_point[1]);
+      //   if (((abs(read_x) >= abs(limit_x)) && (abs(read_x) <= abs(limit_x + resolution))) &&
+      //       ((abs(read_y) >= abs(limit_y)) && (abs(read_y) <= abs(limit_y + resolution))))
+      //   {
+      //     if (first)
+      //     {
+      //       // First reading inside a cell will be the initial point
+      //       // std::cout << "True at: " << x_coord[j] << "," << y_coord[j] << std::endl;
+      //       initial_point[0] = x_coord[k];
+      //       initial_point[1] = y_coord[k];
+      //       // std::cout << "Initial point: " << initial_point[0] << ", " << initial_point[1] << std::endl;
+      //       initial_pts.first.push_back(initial_point[0]);
+      //       initial_pts.second.push_back(initial_point[1]);
+      //       first = false;
+      //     }
+      //     final_point[0] = x_coord[k];
+      //     final_point[1] = y_coord[k];
+      //     ++count_idx;
+      //   }
+      // }
+      // final_pts.first.push_back(final_point[0]);
+      // final_pts.second.push_back(final_point[1]);
 
-      // From the start of the cell to the end - This is an approximation - From the robot pose
-      float distance = calculateDistance(initial_point[0], initial_point[1], final_point[0], final_point[1]);
-      dist_carry += distance;
-      std::cout << "Distance: " << distance << ", " << dist_carry << std::endl;
-      // Before moving into the next cell we can calculate the interal here
-      // We have the initial point and the final point so we can perform this calculation
-      float probability = calculateProbability(ranges[i]);  // This is the right place for calculating this
-      
-      // Distances
-      float d1 = calculateDistance(0, 0, initial_point[0], initial_point[1]);
-      float d2 = calculateDistance(0, 0, final_point[0], final_point[1]);
-      
-      std::cout << "Distances: " << d1 << ", " << d2 << std::endl;
+      // // From the start of the cell to the end - This is an approximation - From the robot pose
+      // float distance = calculateDistance(initial_point[0], initial_point[1], final_point[0], final_point[1]);
+      // dist_carry += distance;
+      // std::cout << "Distance: " << distance << ", " << dist_carry << std::endl;
+      // // Before moving into the next cell we can calculate the interal here
+      // // We have the initial point and the final point so we can perform this calculation
+      // float probability = calculateProbability(ranges[i]);  // This is the right place for calculating this
 
-      // Only one of them applies - Posibilities
-      // Unobserved
-      float unobserved = d1 * probability; 
-      // Occupied
-      float occupied = probability * (d2 - d1); // A change on this one is required
-      // Get the point, if not maximum add resolution to the initial point 
-      // I can do a ray tracing with the whole range 
-      // I have the distance where this is cut so I cand o some mathematical stuff
-      // Free
-      float free = probability * (5.0 - d2);  // Maximum range
+      // // Distances
+      // float d1 = calculateDistance(0, 0, initial_point[0], initial_point[1]);
+      // float d2 = calculateDistance(0, 0, final_point[0], final_point[1]);
 
-      std::cout << "Unobserved: " << unobserved << std::endl;
-      std::cout << "Occupied: " << occupied << std::endl;
-      std::cout << "Free: " << free << std::endl;
+      // std::cout << "Distances: " << d1 << ", " << d2 << std::endl;
 
-      // std::cout << "Initial point: " << initial_point[0] << ", " << initial_point[1] << std::endl;  
+      // // Only one of them applies - Posibilities
+      // // Unobserved
+      // float unobserved = d1 * probability;
+      // // Occupied
+      // float occupied = probability * (d2 - d1); // A change on this one is required
+      // // Get the point, if not maximum add resolution to the initial point
+      // // I can do a ray tracing with the whole range
+      // // I have the distance where this is cut so I cand o some mathematical stuff
+      // // Free
+      // float free = probability * (5.0 - d2);  // Maximum range
+
+      // std::cout << "Unobserved: " << unobserved << std::endl;
+      // std::cout << "Occupied: " << occupied << std::endl;
+      // std::cout << "Free: " << free << std::endl;
+
+      // std::cout << "Initial point: " << initial_point[0] << ", " << initial_point[1] << std::endl;
       // std::cout << "Final point: " << final_point[0] << ", " << final_point[1] << std::endl;
-      // std::cout << "Probability: " << probability << std::endl;    
+      // std::cout << "Probability: " << probability << std::endl;
     }
 
     // std::cout << "-------- Initial points --------" << std::endl;
@@ -329,10 +449,53 @@ void LifelongSlamToolbox::scannerTest()
   }
 }
 
+std::vector<float> LifelongSlamToolbox::getCellPosition(std::vector<int> grid_cell, float resolution)
+{
+  float x = (grid_cell[0] * resolution) + (resolution / 2);
+  float y = (grid_cell[1] * resolution) + (resolution / 2);  
+
+  return {x, y};
+}
+
+
+
+std::vector<float> LifelongSlamToolbox::calculateIntersection(
+  std::vector<float> laser_start, std::vector<float> laser_end,
+  std::vector<float> cell_start, std::vector<float> cell_end)
+{
+    // Initial point laser beam - laser_start
+    // Final point laser beam - laser_end
+    // Initial point cell - cell_start
+    // Final point cell - cell_end
+
+    float x1 = laser_start[0];
+    float x2 = laser_end[0];
+    float x3 = cell_start[0];
+    float x4 = cell_end[0];
+
+    float y1 = laser_start[1];
+    float y2 = laser_end[1];
+    float y3 = cell_start[1];
+    float y4 = cell_end[1];
+
+    float den = ((x2-x1)*(y4-y3) - (x4-x3)*(y2-y1));
+    if (den == 0.0f)
+    {
+        // Parallel lines or not intersection at all
+        return {};
+    }
+    else
+    {
+        float x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2-x1)) / den;
+        float y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2-y1)) / den;
+        // std::cout << x<< ", " << y << std::endl;
+        return {x, y};
+    }
+}
 
 float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, float y_2)
 {
-  /* 
+  /*
     Calculates the euclidean distance between two points
   */
   float diff_x = x_2 - x_1;
@@ -343,7 +506,7 @@ float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, fl
 
 float LifelongSlamToolbox::calculateProbability(float range)
 {
-  /* 
+  /*
     Calculates the probability of a cell being observed by a given measurement
   */
   float max_range = 5.0f;
@@ -358,13 +521,11 @@ float LifelongSlamToolbox::calculateProbability(float range)
 
 std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float resolution)
 {
-  /* 
-    Maps the distance into grid coordinates 
+  /*
+    Maps the distance into grid coordinates
   */
-  // int x_cell = ceil((1 / resolution) * x); 
-  // int y_cell = ceil((1 / resolution) * y); 
-  int x_cell = floor((1 / resolution) * x); 
-  int y_cell = floor((1 / resolution) * y); 
+  int x_cell = floor((1 / resolution) * x);
+  int y_cell = floor((1 / resolution) * y);
 
   /**
    * No matter what I will always get the left bottom corner
@@ -374,12 +535,24 @@ std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float re
   return {x_cell, y_cell};
 }
 
+// std::vector<float> LifelongSlamToolbox::transformPoint(std::vector<float> const& robot_pose, float range, float angle)
+// {
+//   /*
+//     Returns the distance where the laser beam hits something
+//     Rigid Body Trasnformation from the global to the sensor frame
+//   */
+
+//   float x_tf = (range * cos(robot_pose[2]) * cos(angle)) - (range * sin(robot_pose[2]) * sin(angle)) + robot_pose[0];
+//   float y_tf = (range * sin(robot_pose[2]) * cos(angle)) + (range * cos(robot_pose[2]) * sin(angle)) + robot_pose[1];
+
+// }
+
 std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float range, float angle)
 {
-  /* 
-    Returns the distance where the laser beam hits something 
-    Rigid Body Trasnformation from the global to the sensor frame 
-  */ 
+  /*
+    Returns the distance where the laser beam hits something
+    Rigid Body Trasnformation from the global to the sensor frame
+  */
 
   float x_tf = (range * cos(robot_pose[2]) * cos(angle)) - (range * sin(robot_pose[2]) * sin(angle)) + robot_pose[0];
   float y_tf = (range * sin(robot_pose[2]) * cos(angle)) + (range * cos(robot_pose[2]) * sin(angle)) + robot_pose[1];
@@ -389,15 +562,15 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
 
 std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x_1, int y_1, int x_2, int y_2)
 {
-  /* 
-    Returns the set of cells hit by a laser beam 
+  /*
+    Returns the set of cells hit by a laser beam
   */
 	std::vector<int> x_bres;
 	std::vector<int> y_bres;
 
 	int x = x_1;
 	int y = y_1;
-	
+
 	int delta_x = abs(x_2 - x_1);
 	int delta_y = abs(y_2 - y_1);
 
@@ -409,7 +582,7 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
   {
     int temp = delta_x;
     delta_x = delta_y;
-    delta_y = temp;    
+    delta_y = temp;
 		interchange = true;
   }
   else
@@ -424,7 +597,7 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
   x_bres.push_back(x);
   y_bres.push_back(y);
 
-  for (int i = 1; i < delta_x; ++i) 
+  for (int i = 1; i < delta_x; ++i)
   {
     if (e_res < 0)
     {
@@ -438,7 +611,7 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
       }
       e_res += a_res;
     }
-    else 
+    else
     {
       y += s_y;
       x += s_x;
@@ -452,11 +625,11 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
 
 int LifelongSlamToolbox::getSign(int n_1, int n_2)
 {
-  /* 
+  /*
     Returns the sign of an operation, used for Bresenham algorithm
   */
   int difference = n_2 - n_1;
-  
+
   if (difference == 0) { return 0; }
   else if (difference < 0) { return -1; }
   else { return 1; }
