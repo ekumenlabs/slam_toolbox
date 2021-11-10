@@ -81,7 +81,8 @@ protected:
   void updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y);
   float calculateLogs(float probability);
   void updateCellLogs(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, int cell_x, int cell_y, float initial_log);
-
+  float logToProbability(float log);
+  void calculateCellEntropy();
   /*****************************************************************************/
 
   bool use_tree_;
