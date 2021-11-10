@@ -130,7 +130,7 @@ void LifelongSlamToolbox::scannerTest()
   int number_cells = map_dist / resolution;
 
   float unknown_prob = 0.5f;
-  float initial_log = log(unknown_prob / (1.0f - unknown_prob));
+  float initial_log = calculateLogs(unknown_prob); 
   std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
   std::vector<std::vector<float>> grid_prob(number_cells); // 20 meters in Y dimension
   std::vector<std::vector<float>> grid_logs(number_cells); // 20 meters in Y dimension
@@ -182,7 +182,6 @@ void LifelongSlamToolbox::scannerTest()
 
     // Laser continuous distance
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
-    std::cout << laser_grid[0] << "----- , ----- " << laser_grid[1] << std::endl;
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
     std::cout << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
@@ -211,10 +210,15 @@ void LifelongSlamToolbox::scannerTest()
     }
     std::cout << "End of cells" << std::endl;
 
+    std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
-    inverseMeasurement(grid_prob, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
+    inverseMeasurement(grid_prob, grid_logs, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
 
-    // std::cout << "Probability: " << grid_prob[9][8] << std::endl;
+    std::cout << " ...---...---...---...---...---...--- " << std::endl;
+
+    std::cout << "Probability: " << grid_prob[9][8] << std::endl;
+    std::cout << "Logs: " << grid_logs[9][8] << std::endl;
+
     // std::cout << "Probability: " << grid_prob[11][13] << std::endl;
     // std::cout << "Probability: " << grid_prob[11][15] << std::endl;
 
@@ -365,6 +369,7 @@ void LifelongSlamToolbox::scannerTest()
 
 void LifelongSlamToolbox::inverseMeasurement(
   std::vector<std::vector<float>>& grid_prob, 
+  std::vector<std::vector<float>>& grid_logs, 
   std::vector<int>& cells_x, 
   std::vector<int>& cells_y, 
   std::vector<int>& robot_grid_pos, 
@@ -376,12 +381,12 @@ void LifelongSlamToolbox::inverseMeasurement(
     And we update the probability as being occupied or free
   */
 
-  std::cout << "Inverse scanner" << std::endl;
   float alpha = 1.0f;
   float max_r = 5.0f;
 
   for (int i = 0; i < cells_x.size(); ++i) // One reading only
   {
+    std::cout << "Cells: " << cells_x[i] << ", " << cells_y[i] << std::endl;
     // This ditances will be calculated to the center of mass
     // mxi - pos_x //--// myi - pos_y
     float dx = (cells_x[i] - robot_grid_pos[0]) * resolution;
@@ -394,34 +399,51 @@ void LifelongSlamToolbox::inverseMeasurement(
     if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
     {
       std::cout << "Occupied" << std::endl;
+      // Update the probability
       updateCellProbability(grid_prob, 0.7f, cells_x[i], cells_y[i]);
+      // Update the log-odds
+      updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
     }
     // Cell is free
     else if (r <= range)
     {
       std::cout << "Free" << std::endl;
+      // Update the probability
       updateCellProbability(grid_prob, 0.3f, cells_x[i], cells_y[i]);
+      // Update the log-odds
+      updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
     }
 
-    std::cout << "Cells: " << cells_x[i] << ", " << cells_y[i] << std::endl;
     std::cout << "Relative range: " << r << ", Angle: " << phi << std::endl;
-
   }
 }
-// Also need and update grid function
+
+void LifelongSlamToolbox::updateCellLogs(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, int cell_x, int cell_y, float initial_log)
+{
+  /*
+    To update the log-odds matrix
+  */
+  grid_logs[cell_x][cell_y] = grid_logs[cell_x][cell_y] + calculateLogs(grid_prob[cell_x][cell_y]) - initial_log;
+  // std::cout << "Cell Logs: " << grid_logs[cell_x][cell_y] << std::endl;
+  std::cout << "Cell Logs: " << calculateLogs(grid_prob[cell_x][cell_y]) << std::endl;
+}
 
 void LifelongSlamToolbox::updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y)
 {
   /*
     To perform the probability update at the given cell
   */
-  grid_prob[cell_x][cell_x] = probability;
+  grid_prob[cell_x][cell_y] = probability;
+  std::cout << "Cell probability: " << grid_prob[cell_x][cell_y] << std::endl;
 }
 
-
-void LifelongSlamToolbox::updateLogs(initial logs, )
+float LifelongSlamToolbox::calculateLogs(float probability)
 {
-
+  /*
+    To calculate the log-odds
+  */
+  // This is natural algorithm
+  return log(probability / (1 - probability));
 }
 
 std::vector<float> LifelongSlamToolbox::getCellPosition(std::vector<int> grid_cell, float resolution)
