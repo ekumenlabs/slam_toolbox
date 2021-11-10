@@ -127,17 +127,28 @@ void LifelongSlamToolbox::scannerTest()
 
   float resolution = 0.5f; // Cell resolution - 1 meter
   float map_dist = 20.0f; // Total map distance
-
   int number_cells = map_dist / resolution;
+
+  float unknown_prob = 0.5f;
+  float initial_log = log(unknown_prob / (1.0f - unknown_prob));
   std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
+  std::vector<std::vector<float>> grid_prob(number_cells); // 20 meters in Y dimension
+  std::vector<std::vector<float>> grid_logs(number_cells); // 20 meters in Y dimension
+
   for (int i=0; i<number_cells; ++i)
   {
     grid[i].resize(number_cells); // 20 meters in X dimension
+    grid_prob[i].resize(number_cells);
+    grid_logs[i].resize(number_cells);
     for (int j=0; j<number_cells; ++j)
     {
       grid[i][j] = 0;
+      grid_prob[i][j] = unknown_prob; 
+      grid_logs[i][j] = initial_log;
     }
   }
+
+  std::cout << "Logs---------------: " << grid_logs[5][25] << std::endl;
 
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
@@ -154,8 +165,11 @@ void LifelongSlamToolbox::scannerTest()
   std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
   // Creating the laser scan with 5 beams ------- Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
-  std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
+  // std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
+
+  std::vector<float> angles{0.0f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  // std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.785398f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
@@ -168,6 +182,7 @@ void LifelongSlamToolbox::scannerTest()
 
     // Laser continuous distance
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
+    std::cout << laser_grid[0] << "----- , ----- " << laser_grid[1] << std::endl;
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
     std::cout << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
@@ -190,13 +205,18 @@ void LifelongSlamToolbox::scannerTest()
     cells_y.push_back(final_grid_pos[1]);
 
     std::cout << "Cells" << std::endl;
-    std::cout << "Robot start: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-
     for (int c = 0; c < cells_x.size(); ++c) // One reading only
     {
       std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
     }
     std::cout << "End of cells" << std::endl;
+
+
+    inverseMeasurement(grid_prob, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
+
+    // std::cout << "Probability: " << grid_prob[9][8] << std::endl;
+    // std::cout << "Probability: " << grid_prob[11][13] << std::endl;
+    // std::cout << "Probability: " << grid_prob[11][15] << std::endl;
 
     std::vector<float> initial_point(2), final_point(2);
 
@@ -311,6 +331,7 @@ void LifelongSlamToolbox::scannerTest()
         */  
         float dist_point = calculateDistance(robot_pose[0], robot_pose[1], inter_x[k], inter_y[k]);
         distances.push_back(dist_point);
+
         std::cout << "Distance: " << dist_point << std::endl;
       }
 
@@ -328,13 +349,79 @@ void LifelongSlamToolbox::scannerTest()
       float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
       float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
       std::cout << "Probabilities: " << prob_not << ", " << prob_occ << ", " << prob_free << std::endl;
-
+      
+    
       // The entropy of a grid cell C given a set of measurement outcomes z is given by 3.5
       // I need to calculate the entropy of a cell given a set of measurements
 
+      // Inverse model
+      // Probabiloityu
+      // Entropy
       std::cout << " ++++++++++++++++++++++++ " << std::endl;
     }
   }
+}
+
+
+void LifelongSlamToolbox::inverseMeasurement(
+  std::vector<std::vector<float>>& grid_prob, 
+  std::vector<int>& cells_x, 
+  std::vector<int>& cells_y, 
+  std::vector<int>& robot_grid_pos, 
+  float range, float angle, float resolution)
+{
+  /*
+    On this function we update a probability map based 
+    We capture the cells that are hitted by the ray and the conditions
+    And we update the probability as being occupied or free
+  */
+
+  std::cout << "Inverse scanner" << std::endl;
+  float alpha = 1.0f;
+  float max_r = 5.0f;
+
+  for (int i = 0; i < cells_x.size(); ++i) // One reading only
+  {
+    // This ditances will be calculated to the center of mass
+    // mxi - pos_x //--// myi - pos_y
+    float dx = (cells_x[i] - robot_grid_pos[0]) * resolution;
+    float dy = (cells_y[i] - robot_grid_pos[1]) * resolution;
+
+    float r = sqrt(pow(dx , 2) + pow(dy, 2));
+    float phi = atan2(dy, dx) - robot_grid_pos[2];
+  
+    // Cell is occupied -- This condition might be different
+    if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
+    {
+      std::cout << "Occupied" << std::endl;
+      updateCellProbability(grid_prob, 0.7f, cells_x[i], cells_y[i]);
+    }
+    // Cell is free
+    else if (r <= range)
+    {
+      std::cout << "Free" << std::endl;
+      updateCellProbability(grid_prob, 0.3f, cells_x[i], cells_y[i]);
+    }
+
+    std::cout << "Cells: " << cells_x[i] << ", " << cells_y[i] << std::endl;
+    std::cout << "Relative range: " << r << ", Angle: " << phi << std::endl;
+
+  }
+}
+// Also need and update grid function
+
+void LifelongSlamToolbox::updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y)
+{
+  /*
+    To perform the probability update at the given cell
+  */
+  grid_prob[cell_x][cell_x] = probability;
+}
+
+
+void LifelongSlamToolbox::updateLogs(initial logs, )
+{
+
 }
 
 std::vector<float> LifelongSlamToolbox::getCellPosition(std::vector<int> grid_cell, float resolution)
@@ -424,9 +511,8 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
     Returns the distance where the laser beam hits something
     Rigid Body Trasnformation from the global to the sensor frame
   */
-
-  float x_tf = (range * cos(robot_pose[2]) * cos(angle)) - (range * sin(robot_pose[2]) * sin(angle)) + robot_pose[0];
-  float y_tf = (range * sin(robot_pose[2]) * cos(angle)) + (range * cos(robot_pose[2]) * sin(angle)) + robot_pose[1];
+  float x_tf = (range * cos(robot_pose[2] + angle)) + robot_pose[0];
+  float y_tf = (range * sin(robot_pose[2] + angle)) + robot_pose[1];
 
   return {x_tf, y_tf};
 }

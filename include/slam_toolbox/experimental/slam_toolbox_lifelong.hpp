@@ -77,6 +77,10 @@ protected:
   float calculateDistance(float x_1, float y_1, float x_2, float y_2);
   void scannerTest();
   std::vector<float> getCellPosition(std::vector<int> grid_cell, float resolution);
+  void inverseMeasurement(std::vector<std::vector<float>>& grid_prob, std::vector<int>& cells_x, std::vector<int>& cells_y, std::vector<int>& robot_grid_pos, float range, float angle, float resolution);
+  void updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y);
+  void updateCellLogs();
+
   /*****************************************************************************/
 
   bool use_tree_;
