@@ -134,21 +134,28 @@ void LifelongSlamToolbox::scannerTest()
   std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
   std::vector<std::vector<float>> grid_prob(number_cells); // 20 meters in Y dimension
   std::vector<std::vector<float>> grid_logs(number_cells); // 20 meters in Y dimension
+  std::vector<std::vector<float>> grid_etp(number_cells); // 20 meters in Y dimension
+
 
   for (int i=0; i<number_cells; ++i)
   {
     grid[i].resize(number_cells); // 20 meters in X dimension
     grid_prob[i].resize(number_cells);
     grid_logs[i].resize(number_cells);
+    grid_etp[i].resize(number_cells);
     for (int j=0; j<number_cells; ++j)
     {
       grid[i][j] = 0;
       grid_prob[i][j] = unknown_prob; 
       grid_logs[i][j] = initial_log;
+      grid_etp[i][j] = entropyFromProbability(probabilityFromLog(grid_logs[i][j]));
     }
   }
 
-  std::cout << "Logs---------------: " << grid_logs[5][25] << std::endl;
+  // std::cout << "Probabilities---------------: " << grid_prob[5][25] << std::endl;
+  // std::cout << "Logs---------------: " << grid_logs[5][25] << std::endl;
+  // std::cout << "Log to Prob---------------: " << probabilityFromLog(grid_logs[5][25]) << std::endl;
+  // std::cout << "Entropies---------------: " << grid_etp[5][25] << std::endl;
 
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
@@ -203,21 +210,23 @@ void LifelongSlamToolbox::scannerTest()
     cells_x.push_back(final_grid_pos[0]); 
     cells_y.push_back(final_grid_pos[1]);
 
-    std::cout << "Cells" << std::endl;
-    for (int c = 0; c < cells_x.size(); ++c) // One reading only
-    {
-      std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
-    }
-    std::cout << "End of cells" << std::endl;
+    // std::cout << "Cells" << std::endl;
+    // for (int c = 0; c < cells_x.size(); ++c) // One reading only
+    // {
+    //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+    // }
+    // std::cout << "End of cells" << std::endl;
 
     std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
-    inverseMeasurement(grid_prob, grid_logs, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
+    inverseMeasurement(grid_prob, grid_logs, grid_etp, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
 
+    std::cout << "Map entropy" << std::endl;
+    float etp = calculateMapEntropy(grid_etp);
     std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
-    std::cout << "Probability: " << grid_prob[9][8] << std::endl;
-    std::cout << "Logs: " << grid_logs[9][8] << std::endl;
+    // std::cout << "Probability: " << grid_prob[9][8] << std::endl;
+    // std::cout << "Logs: " << grid_logs[9][8] << std::endl;
 
     // std::cout << "Probability: " << grid_prob[11][13] << std::endl;
     // std::cout << "Probability: " << grid_prob[11][15] << std::endl;
@@ -366,10 +375,25 @@ void LifelongSlamToolbox::scannerTest()
   }
 }
 
+float LifelongSlamToolbox::calculateMapEntropy(std::vector<std::vector<float>>& grid_etp)
+{
+  /*
+    To calculate the map entropy
+  */
+  float map_etp = 0.0f; 
+  for (auto vct : grid_etp)
+  {
+    std::for_each(vct.begin(), vct.end(), [&] (float entropy) {
+      map_etp += entropy;
+    });
+  }
+  return map_etp;
+}
 
 void LifelongSlamToolbox::inverseMeasurement(
   std::vector<std::vector<float>>& grid_prob, 
   std::vector<std::vector<float>>& grid_logs, 
+  std::vector<std::vector<float>>& grid_etp, 
   std::vector<int>& cells_x, 
   std::vector<int>& cells_y, 
   std::vector<int>& robot_grid_pos, 
@@ -392,36 +416,59 @@ void LifelongSlamToolbox::inverseMeasurement(
     float dx = (cells_x[i] - robot_grid_pos[0]) * resolution;
     float dy = (cells_y[i] - robot_grid_pos[1]) * resolution;
 
+    // std::cout << "dx: " << dx << ", dy: " << dy << std::endl;
+
     float r = sqrt(pow(dx , 2) + pow(dy, 2));
-    float phi = atan2(dy, dx) - robot_grid_pos[2];
-    
-    
-    // I can assing only one value and calculate it once (Half the code)
-  
+    // float phi = atan2(dy, dx) - robot_grid_pos[2];
+    float occ_prob = 0.5f;  // Unkwnown 
+
     // Cell is occupied -- This condition might be different
     if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
     {
       std::cout << "Occupied" << std::endl;
+      occ_prob = 0.7f;
       // Update the probability
-      updateCellProbability(grid_prob, 0.7f, cells_x[i], cells_y[i]);
+      // updateCellProbability(grid_prob, 0.7f, cells_x[i], cells_y[i]);
       // Update the log-odds
-      updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
+      // updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
       // Log-odds to probability
-      float prob = logToProbability(grid_logs[cells_x[i]][cells_y[i]]);
+      // float prob = probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]);
     }
     // Cell is free
     else if (r <= range)
     {
       std::cout << "Free" << std::endl;
+      occ_prob = 0.3f;
       // Update the probability
-      updateCellProbability(grid_prob, 0.3f, cells_x[i], cells_y[i]);
+      // updateCellProbability(grid_prob, 0.3f, cells_x[i], cells_y[i]);
       // Update the log-odds
-      updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
+      // updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
       // Log-odds to probability
-      float prob = logToProbability(grid_logs[cells_x[i]][cells_y[i]]);
+      // float prob = probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]);
+      // float entropy = entropyFromProbability(probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]));
+      // updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
     }
 
-    std::cout << "Relative range: " << r << ", Angle: " << phi << std::endl;
+    // Update the probability
+    updateCellProbability(grid_prob, occ_prob, cells_x[i], cells_y[i]);
+    // std::cout << "Probability: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
+    // Update the log-odds
+    updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
+    // std::cout << "Log-Odds: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
+    // Log-odds to probability
+    float entropy = entropyFromProbability(probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]));
+    // Update the entropy  
+    updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
+    // std::cout << "Entropy: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
+    
+    // std::cout << "Probabilities---------------: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
+    // std::cout << "Logs---------------: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
+    // std::cout << "Log to Prob---------------: " << probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]) << std::endl;
+    // std::cout << "Entropies---------------: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
+    
+    // std::cout << "Relative range: " << r << ", Angle: " << phi << std::endl;
+    std::cout << "Relative range: " << r << std::endl;
+    std::cout << " ++++++++++++++++++++++++ " << std::endl;
   }
 }
 
@@ -433,15 +480,25 @@ void LifelongSlamToolbox::inverseMeasurement(
   Calculate the entropy of a given cell
 */
 
-void LifelongSlamToolbox::calculateCellEntropy()
+void LifelongSlamToolbox::updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy)
 {
-  // Need for this one a matrix with all the entropies
-  // Need to define where this calculation will take place
-  ;
+  /*
+    To update the cell entropy
+    - H = H - Entropy;
+  */
+  grid_etp[cell_x][cell_y] = grid_etp[cell_x][cell_y] - entropy; 
 }
 
+float LifelongSlamToolbox::entropyFromProbability(float prob)
+{
+  /*
+    To calculate the cell entropy from the probability
+    - Entropy = (p*log(p) + (1-p)*log(1-p));
+  */
+  return (prob * log(prob)) * ((1 - prob) * log(1 - prob));
+}
 
-float LifelongSlamToolbox::logToProbability(float log)
+float LifelongSlamToolbox::probabilityFromLog(float log)
 {
   /*  
     To transform the Log-odds into probability
@@ -455,7 +512,6 @@ void LifelongSlamToolbox::updateCellLogs(std::vector<std::vector<float>>& grid_p
     To update the log-odds matrix
   */
   grid_logs[cell_x][cell_y] = grid_logs[cell_x][cell_y] + calculateLogs(grid_prob[cell_x][cell_y]) - initial_log;
-  // std::cout << "Cell Logs: " << grid_logs[cell_x][cell_y] << std::endl;
 }
 
 void LifelongSlamToolbox::updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y)
@@ -464,7 +520,6 @@ void LifelongSlamToolbox::updateCellProbability(std::vector<std::vector<float>>&
     To perform the probability update at the given cell
   */
   grid_prob[cell_x][cell_y] = probability;
-  // std::cout << "Cell probability: " << grid_prob[cell_x][cell_y] << std::endl;
 }
 
 float LifelongSlamToolbox::calculateLogs(float probability)
@@ -472,7 +527,6 @@ float LifelongSlamToolbox::calculateLogs(float probability)
   /*
     To calculate the log-odds
   */
-  // This is natural algorithm
   return log(probability / (1 - probability));
 }
 

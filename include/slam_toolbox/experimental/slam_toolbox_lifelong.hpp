@@ -77,12 +77,14 @@ protected:
   float calculateDistance(float x_1, float y_1, float x_2, float y_2);
   void scannerTest();
   std::vector<float> getCellPosition(std::vector<int> grid_cell, float resolution);
-  void inverseMeasurement(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, std::vector<int>& cells_x, std::vector<int>& cells_y, std::vector<int>& robot_grid_pos, float range, float angle, float resolution);
+  void inverseMeasurement(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, std::vector<std::vector<float>>& grid_etp, std::vector<int>& cells_x, std::vector<int>& cells_y, std::vector<int>& robot_grid_pos, float range, float angle, float resolution);
   void updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y);
   float calculateLogs(float probability);
   void updateCellLogs(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, int cell_x, int cell_y, float initial_log);
-  float logToProbability(float log);
-  void calculateCellEntropy();
+  float probabilityFromLog(float log);  // Recovering the probability
+  float entropyFromProbability(float prob);
+  void updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy);
+  float calculateMapEntropy(std::vector<std::vector<float>>& grid_etp);
   /*****************************************************************************/
 
   bool use_tree_;
