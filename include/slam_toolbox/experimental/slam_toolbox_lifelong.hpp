@@ -85,6 +85,18 @@ protected:
   float entropyFromProbability(float prob);
   void updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy);
   float calculateMapEntropy(std::vector<std::vector<float>>& grid_etp);
+
+  // For algorithm 1
+  void appendCellProbabilities(std::vector<int> cell, std::vector<float>& probabilities);
+  void computeProbabilities(std::vector<int> cell, std::vector<std::vector<float>>& meas_outcm);
+  void retreiveProbabilities();
+  std::vector<int> unhashIndex(int hash);
+
+  // Data structures 
+  // Keep track of the probabilities for each cell
+  std::map<std::vector<int>, std::vector<std::vector<float>>> m_cell_probabilities;
+  int m_cell_x;
+  int m_cell_y;  
   /*****************************************************************************/
 
   bool use_tree_;

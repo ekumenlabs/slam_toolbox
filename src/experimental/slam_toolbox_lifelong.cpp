@@ -125,7 +125,7 @@ void LifelongSlamToolbox::scannerTest()
 {
   RCLCPP_WARN(get_logger(), "<-------- Scanner Test -------->");
 
-  float resolution = 0.5f; // Cell resolution - 1 meter
+  float resolution = 0.5f; // Cell resolution - 0.5m
   float map_dist = 20.0f; // Total map distance
   int number_cells = map_dist / resolution;
 
@@ -139,7 +139,7 @@ void LifelongSlamToolbox::scannerTest()
 
   for (int i=0; i<number_cells; ++i)
   {
-    grid[i].resize(number_cells); // 20 meters in X dimension
+    grid[i].resize(number_cells);
     grid_prob[i].resize(number_cells);
     grid_logs[i].resize(number_cells);
     grid_etp[i].resize(number_cells);
@@ -175,14 +175,14 @@ void LifelongSlamToolbox::scannerTest()
   std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
   // std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
 
-  std::vector<float> angles{0.0f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.785398f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
   // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
   // for (int i = 0; i < ranges.size(); ++i)
-  for (int i = 0; i < 1; ++i) // One reading only
+  for (int i = 0; i < 2; ++i) // One reading only
   {
     std::cout << "........ New laser ........" << std::endl;
     std::cout << "Distance: " << ranges[i] << ", Angle: " << angles[i] << std::endl;
@@ -192,9 +192,6 @@ void LifelongSlamToolbox::scannerTest()
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
     std::cout << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
-
-    std::vector<float> cell_pos = getCellPosition({11, 12}, resolution);
-    std::cout << cell_pos[0] << ", " << cell_pos[1] << std::endl;
 
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
@@ -217,19 +214,15 @@ void LifelongSlamToolbox::scannerTest()
     // }
     // std::cout << "End of cells" << std::endl;
 
-    std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
-    inverseMeasurement(grid_prob, grid_logs, grid_etp, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
+    // std::cout << " ...---...---...---...---...---...--- " << std::endl;
+    // For now this will not be used
+    // Cell probability, log-odds and entropy calculation
+    // inverseMeasurement(grid_prob, grid_logs, grid_etp, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
+    // Map entropy calculation
+    // float etp = calculateMapEntropy(grid_etp);
+    // std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
-    std::cout << "Map entropy" << std::endl;
-    float etp = calculateMapEntropy(grid_etp);
-    std::cout << " ...---...---...---...---...---...--- " << std::endl;
-
-    // std::cout << "Probability: " << grid_prob[9][8] << std::endl;
-    // std::cout << "Logs: " << grid_logs[9][8] << std::endl;
-
-    // std::cout << "Probability: " << grid_prob[11][13] << std::endl;
-    // std::cout << "Probability: " << grid_prob[11][15] << std::endl;
 
     std::vector<float> initial_point(2), final_point(2);
 
@@ -237,7 +230,8 @@ void LifelongSlamToolbox::scannerTest()
     initial_point[1] = 0.0f;
 
     std::cout << " +++++++++++++ " << std::endl;
-    // Visiting the cells this beam travels trough
+
+    // Start of the loop for 
     for (int j = 0; j < cells_x.size(); ++j)
     {
       if ((robot_grid_pos[0] == cells_x[j]) &&  (robot_grid_pos[1] == cells_y[j]))
@@ -358,20 +352,94 @@ void LifelongSlamToolbox::scannerTest()
       // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
       // I think this one is working well
-      float prob_not = calculateProbability(0.0f, distances[0]); // 3.8 - Does not oberserve
-      float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
-      float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
-      std::cout << "Probabilities: " << prob_not << ", " << prob_occ << ", " << prob_free << std::endl;
-      
-    
-      // The entropy of a grid cell C given a set of measurement outcomes z is given by 3.5
-      // I need to calculate the entropy of a cell given a set of measurements
+      // float prob_not = calculateProbability(0.0f, distances[0]); // 3.8 - Does not oberserve
+      // float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
+      // float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
 
-      // Inverse model
-      // Probabiloityu
-      // Entropy
+      std::vector<float> probabilities {
+        calculateProbability(distances[1], 5.0f),
+        calculateProbability(distances[0], distances[1]),
+        calculateProbability(0.0f, distances[0])
+      };
+
+
+      // Need to check here the cell reference. I need to pass the cells in a better way. Hate to create unnecessary copies 
+      // Here is where I need to extract the probabilities of each cell and pass both the cell and the probabilities as argument
+      // Cell would be better if just keep two integers and reassign them
+
+      appendCellProbabilities({cells_x[j], cells_y[j]}, probabilities);
+
+      /*
+        We have all the cells appended
+        We check all the cells we have appended
+      */
+
+
+      // computeProbabilities({cells_x[j], cells_y[j]}, meas_outcm);
+
+      /* 
+        On this point I have the probabilities of a cell being observed
+      
+        As soon as I calculate the probabilities of a cell I need to append the probabilities into my data structure
+
+        Then another external function will be in charge of calculating the combined probabilities of an specific cell
+        with this function computeProbabilities
+
+        Probabilities calculation is done for a specific cell, so we read the data for one cell and propagate the probabilities.
+
+        I need to investigate if the function for extracting the measurement outcomes for a specific cell is required
+      */
+
+      std::cout << "Probabilities: " << probabilities[0] << ", " << probabilities[1] << ", " << probabilities[2] << std::endl;
       std::cout << " ++++++++++++++++++++++++ " << std::endl;
     }
+  }
+}
+
+void LifelongSlamToolbox::retreiveProbabilities()
+{
+  // Iterator for getting the cell
+  std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
+
+  it_cells = m_cell_probabilities.find({m_cell_x, m_cell_y});
+
+
+  if (it_cells != m_cell_probabilities.end())
+  {
+    std::cout << "Current cell: " << it_cells->first[0] << ", " << it_cells->first[1] << std::endl;
+  
+    // Exploring the measurement outcomes for the specific cell
+    for (int i = 0; i < it_cells->second.size(); ++i)
+    {
+      std::cout << "Measurement outcomes: ";
+      std::cout << it_cells->second[i][0] << ", " << it_cells->second[i][1] << ", " << it_cells->second[i][2] << std::endl;
+    }
+  }
+}
+
+void LifelongSlamToolbox::appendCellProbabilities(std::vector<int> cell, std::vector<float>& probabilities)
+{
+  /*
+    To append a new measurement outcome for a specific cell
+  */
+
+  // Iterator for getting the cell
+  std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cell;
+  
+  it_cell = m_cell_probabilities.find({cell[0], cell[1]});
+
+  if (it_cell == m_cell_probabilities.end())
+  {
+    // Cell is not present in the map
+    m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<float>>>(
+      {cell[0], cell[1]}, 
+      {{probabilities[0], probabilities[1], probabilities[2]}}
+    ));
+  }
+  else
+  {
+    // Cell is already in the map, only add the next measurement outcome
+    it_cell->second.push_back({probabilities[0], probabilities[1], probabilities[2]});
   }
 }
 
@@ -415,70 +483,197 @@ void LifelongSlamToolbox::inverseMeasurement(
     // mxi - pos_x //--// myi - pos_y
     float dx = (cells_x[i] - robot_grid_pos[0]) * resolution;
     float dy = (cells_y[i] - robot_grid_pos[1]) * resolution;
-
-    // std::cout << "dx: " << dx << ", dy: " << dy << std::endl;
-
     float r = sqrt(pow(dx , 2) + pow(dy, 2));
-    // float phi = atan2(dy, dx) - robot_grid_pos[2];
     float occ_prob = 0.5f;  // Unkwnown 
 
-    // Cell is occupied -- This condition might be different
+    // Cell is occupied 
     if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
     {
       std::cout << "Occupied" << std::endl;
       occ_prob = 0.7f;
-      // Update the probability
-      // updateCellProbability(grid_prob, 0.7f, cells_x[i], cells_y[i]);
-      // Update the log-odds
-      // updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
-      // Log-odds to probability
-      // float prob = probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]);
     }
     // Cell is free
     else if (r <= range)
     {
       std::cout << "Free" << std::endl;
       occ_prob = 0.3f;
-      // Update the probability
-      // updateCellProbability(grid_prob, 0.3f, cells_x[i], cells_y[i]);
-      // Update the log-odds
-      // updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
-      // Log-odds to probability
-      // float prob = probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]);
-      // float entropy = entropyFromProbability(probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]));
-      // updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
     }
 
     // Update the probability
     updateCellProbability(grid_prob, occ_prob, cells_x[i], cells_y[i]);
-    // std::cout << "Probability: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
+
     // Update the log-odds
     updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
-    // std::cout << "Log-Odds: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
     // Log-odds to probability
     float entropy = entropyFromProbability(probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]));
     // Update the entropy  
     updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
+
+    // std::cout << "Probability: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
+    // std::cout << "Log-Odds: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
     // std::cout << "Entropy: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
     
-    // std::cout << "Probabilities---------------: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
-    // std::cout << "Logs---------------: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
-    // std::cout << "Log to Prob---------------: " << probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]) << std::endl;
-    // std::cout << "Entropies---------------: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
-    
-    // std::cout << "Relative range: " << r << ", Angle: " << phi << std::endl;
     std::cout << "Relative range: " << r << std::endl;
     std::cout << " ++++++++++++++++++++++++ " << std::endl;
   }
 }
 
+std::vector<int> LifelongSlamToolbox::unhashIndex(int hash)
+{
+  /*
+    To get the index of the current cell combination
+  */
 
-/*
-  Next steps
-  Done - log-odds will be acumulating the probability based on different observations - Bayes filter
-  Transform the log-odds into probability 
-  Calculate the entropy of a given cell
-*/
+  // Hundreds, dozens, units
+  int hash_h, hash_d, hash_u;
+
+  std::vector<int> index;
+  index.reserve(3);
+
+  if (hash > 99 && hash < 999)
+  {
+    hash_h = hash / 100;
+    hash_d = (hash - (hash_h * 100)) / 10; 
+    hash_u = hash - (hash_h * 100) - (hash_d * 10);
+    index.emplace_back(hash_u);
+    index.emplace_back(hash_d);
+    index.emplace_back(hash_h);
+  }
+  else if (hash > 10 && hash <= 99)
+  {
+    hash_d = hash / 10;
+    hash_u = hash - (hash_d * 10); 
+    index.emplace_back(hash_u);
+    index.emplace_back(hash_d);
+    index.emplace_back(0);
+  }
+  else
+  {
+    index.emplace_back(hash);
+    index.emplace_back(0);
+    index.emplace_back(0);
+  }
+  return index;
+}
+
+void LifelongSlamToolbox::computeProbabilities(std::vector<int> cell, std::vector<std::vector<float>>& meas_outcm)
+{
+  /*
+      Input:
+          - Cell: std::vector<int>& const cell
+          - Set of measurement outcomes: std::vector<std::vector<float>>& const meas_outcm
+      Output
+          - It should be a vector of probabilties
+  */
+
+  // Number off measurement outcomes for the current cell
+  int k = meas_outcm.size();
+  std::cout << "K: " << k << std::endl;
+  
+  // Current reading
+  int r = 1;
+  
+  // Map for the combinations and the propagated probability
+  std::map<std::vector<std::vector<int>>, float> probabilities;
+  // Initial condition 
+  probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{0, 0, 0}}, 1.0f));
+  
+  float p_free = meas_outcm[0][2];
+  float p_occ = meas_outcm[0][1];
+  float p_un = meas_outcm[0][0];
+  
+  // Inserting the first node r = 1
+  probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{1, 0, 0}}, p_free));
+  probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{0, 1, 0}}, p_occ));
+  probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{0, 0, 1}}, p_un));
+
+  std::cout << p_free << ", " << p_occ << ", " << p_un << std::endl;
+  std::cout <<  "++++++++++++++++++++++++++++" << std::endl;
+  
+  std::map<std::vector<std::vector<int>>, float>::iterator it;
+
+  std::vector<int>::iterator it_combinations;
+  
+  for (int i = r; r < k; ++r)
+  {
+    std::cout << "R: " << r << std::endl;
+
+    // Vector for saving the cells combinations
+    std::vector<int> combinations;
+    // Vector for saving the cells combinatios probabilities
+    std::vector<float> acc_prob;
+    
+    for (it = probabilities.begin(); it != probabilities.end(); ++it)
+    {     
+      int fr_idx = it->first[0][2];
+      int oc_idx = it->first[0][1];
+      int un_idx = it->first[0][0];
+      
+      float free_prop = meas_outcm[r][0]; 
+      float occ_prop = meas_outcm[r][1];
+      float un_prop = meas_outcm[r][2];
+      
+      if (fr_idx + oc_idx + un_idx == r)
+      {
+        // std::cout << it->first[0][2] << ", " << it->first[0][1]  << ", " << it->first[0][0] << ", " << it->second <<std::endl;
+        
+        // std::cout << "Propagating" << std::endl;  
+        // std::cout << fr_idx + 1 << ", " << oc_idx << ", " << un_idx << std::endl;
+        // std::cout << fr_idx << ", " << oc_idx + 1 << ", " << un_idx << std::endl;
+        // std::cout << fr_idx << ", " << oc_idx << ", " << un_idx + 1 << std::endl;
+        
+        // Hashing the current index
+        int hash_free = ((fr_idx + 1) * 100) + (oc_idx * 10) + un_idx;
+        int hash_occ = (fr_idx * 100) + ((oc_idx + 1) * 10) + un_idx;
+        int hash_un = (fr_idx * 100) + (oc_idx * 10) + un_idx + 1;
+        
+        it_combinations = std::find(combinations.begin(), combinations.end(), hash_free);
+        if (it_combinations != combinations.end())
+        {
+          acc_prob[it_combinations - combinations.begin()] += it->second * free_prop;
+        }
+        else
+        {
+          combinations.push_back(hash_free);  // Adding new probabilities
+          acc_prob.push_back(it->second * free_prop);  // Appending probabilities
+        }
+        
+        it_combinations = std::find(combinations.begin(), combinations.end(), hash_occ);
+        if (it_combinations != combinations.end())
+        {
+          acc_prob[it_combinations - combinations.begin()] += it->second * occ_prop;
+        }
+        else
+        {
+          combinations.push_back(hash_occ);  // Adding new probabilities
+          acc_prob.push_back(it->second * occ_prop);  // Appending probabilities
+        }
+        
+        it_combinations = std::find(combinations.begin(), combinations.end(), hash_un);
+        if (it_combinations != combinations.end())
+        {
+          acc_prob[it_combinations - combinations.begin()] += it->second * un_prop;
+        }
+        else
+        {
+          combinations.push_back(hash_un);  // Adding new probabilities
+          acc_prob.push_back(it->second * un_prop);  // Appending probabilities
+        }
+        std::cout << "------------------" << std::endl;
+      }
+    }
+    
+    std::cout << "//------------------//" << std::endl;
+    for (int k = 0; k < combinations.size(); ++k)
+    {
+      std::cout << combinations[k] << ", " << acc_prob[k] << std::endl;
+      
+      probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({unhashIndex(combinations[k])}, acc_prob[k]));
+      
+    }
+    std::cout << "//------------------//" << std::endl;
+  }
+}
 
 void LifelongSlamToolbox::updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy)
 {
@@ -592,11 +787,25 @@ float LifelongSlamToolbox::calculateProbability(float range_1, float range_2)
   /*
     Calculates the probability of a cell being observed by a given measurement
     range_1: lower limit, range_2: upper limit
+    https://www.probabilitycourse.com/chapter4/4_2_4_Gamma_distribution.php
+    https://homepage.divms.uiowa.edu/~mbognar/applets/gamma.html
+    https://www.youtube.com/watch?v=jWh4HY_Geaw
+    
+    This distribution needs to be changed
+    From my perspective we should use a Gamma distribution instead of an exponential
+    That would change the integral as well. It might be more complex with Gamma
+  
+    - float lambda = 0.285f;
+    - float nu = 1.0f / lambda;
+
+    https://www.wolframalpha.com/input/?i=plot+0.28*0.35*e%5E%28-0.35*x%29+from+x%3D0+to+15
   */
   float max_range = 5.0f;
-  float lambda = 0.285f;
-  float nu = 1.0f / lambda;
 
+  float lambda = 0.35f;
+  float nu = 0.28f;
+
+  range_1 = (range_1 > max_range) ? max_range : range_1;
   range_2 = (range_2 > max_range) ? max_range : range_2;
 
   // https://www.wolframalpha.com/input/?i2d=true&i=Integrate%5Bn*c*Power%5Be%2C-c*x%5D%2C%7Bx%2Ca%2Cb%7D%5D
