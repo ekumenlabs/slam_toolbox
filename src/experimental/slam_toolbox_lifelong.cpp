@@ -21,6 +21,7 @@
 #include <vector>
 #include <math.h>
 #include <stdlib.h>
+#include <unordered_map>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
 
 #define PI 3.14159265
@@ -160,7 +161,7 @@ void LifelongSlamToolbox::scannerTest()
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/4};
-  std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
+  std::vector<float> robot_pose{5.6f, 6.0f, PI/2}; // Create another set of poses
   // std::vector<float> robot_pose{5.5f, 6.0f, -PI/4};
   // std::vector<float> robot_pose{5.5f, 6.0f, -3*PI/4};
   // -PI is an unhandled case
@@ -223,15 +224,9 @@ void LifelongSlamToolbox::scannerTest()
     // float etp = calculateMapEntropy(grid_etp);
     // std::cout << " ...---...---...---...---...---...--- " << std::endl;
 
+    std::cout << "Loop for visiting the cells " << std::endl;
 
-    std::vector<float> initial_point(2), final_point(2);
-
-    initial_point[0] = 0.0f;
-    initial_point[1] = 0.0f;
-
-    std::cout << " +++++++++++++ " << std::endl;
-
-    // Start of the loop for 
+    // Visiting the cells
     for (int j = 0; j < cells_x.size(); ++j)
     {
       if ((robot_grid_pos[0] == cells_x[j]) &&  (robot_grid_pos[1] == cells_y[j]))
@@ -241,7 +236,7 @@ void LifelongSlamToolbox::scannerTest()
       }
 
       // Cells visualization
-      std::cout << cells_x[j] << ", " << cells_y[j] << std::endl;
+      std::cout << "Current cell: " <<cells_x[j] << ", " << cells_y[j] << std::endl;
 
       // Converting the cell into distance
       float limit_x = cells_x[j] * resolution;
@@ -321,7 +316,7 @@ void LifelongSlamToolbox::scannerTest()
               - A laser beam can cut the cell at least 1 time (Enter)
               - A laser beam can cut the cell at most 2 times (Enter an exit)
             */
-            std::cout << "Interception at: " << intersection[0] << ", " << intersection[1] << std::endl;
+            // std::cout << "Interception at: " << intersection[0] << ", " << intersection[1] << std::endl;
             inter_x.push_back(intersection[0]);
             inter_y.push_back(intersection[1]);
           }
@@ -333,13 +328,14 @@ void LifelongSlamToolbox::scannerTest()
       for (int k = 0; k < inter_x.size(); ++k)
       {
         /*
+          This could be a ring buffer - Actually some elements can be a ring buffer
           dist_point[0]: d1
           dist_point[1]: d2
         */  
         float dist_point = calculateDistance(robot_pose[0], robot_pose[1], inter_x[k], inter_y[k]);
         distances.push_back(dist_point);
 
-        std::cout << "Distance: " << dist_point << std::endl;
+        // std::cout << "Distance: " << dist_point << std::endl;
       }
 
       /*
@@ -351,73 +347,70 @@ void LifelongSlamToolbox::scannerTest()
       // d2 which is distance from robot pose to second point where the cell is cut
       // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
-      // I think this one is working well
       // float prob_not = calculateProbability(0.0f, distances[0]); // 3.8 - Does not oberserve
       // float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
       // float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
 
+      // Measurement outcomes vector
       std::vector<float> probabilities {
         calculateProbability(distances[1], 5.0f),
         calculateProbability(distances[0], distances[1]),
         calculateProbability(0.0f, distances[0])
       };
 
+      // Assigning the cells
+      m_cell_x = cells_x[j];
+      m_cell_y = cells_y[j];
 
-      // Need to check here the cell reference. I need to pass the cells in a better way. Hate to create unnecessary copies 
-      // Here is where I need to extract the probabilities of each cell and pass both the cell and the probabilities as argument
-      // Cell would be better if just keep two integers and reassign them
+      // Appending new measurement outcomes for the current cell
+      appendCellProbabilities(probabilities);   
 
-      appendCellProbabilities({cells_x[j], cells_y[j]}, probabilities);
+      // Get all the measurement outcomes for the current cell 
+      std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes(); 
+      
+      // Compute all the possible combinations
+      computeProbabilities(meas_outcomes);
 
       /*
-        We have all the cells appended
-        We check all the cells we have appended
+        Note for entropy
+        I am not sure if the paper is also writing it wrong, but fot all the possible measurement outcomes,
+        I do have the probability (Also the cell combinations) which is the one I can use to get the entropy.
+
+        Also need to add new elements to one cell
+        This would be the next step.
       */
 
-
-      // computeProbabilities({cells_x[j], cells_y[j]}, meas_outcm);
-
-      /* 
-        On this point I have the probabilities of a cell being observed
-      
-        As soon as I calculate the probabilities of a cell I need to append the probabilities into my data structure
-
-        Then another external function will be in charge of calculating the combined probabilities of an specific cell
-        with this function computeProbabilities
-
-        Probabilities calculation is done for a specific cell, so we read the data for one cell and propagate the probabilities.
-
-        I need to investigate if the function for extracting the measurement outcomes for a specific cell is required
-      */
-
-      std::cout << "Probabilities: " << probabilities[0] << ", " << probabilities[1] << ", " << probabilities[2] << std::endl;
-      std::cout << " ++++++++++++++++++++++++ " << std::endl;
+      //std::cout << "Probabilities: " << probabilities[0] << ", " << probabilities[1] << ", " << probabilities[2] << std::endl;
+      std::cout << "++++++++++++++++++++++++" << std::endl;
     }
   }
 }
 
-void LifelongSlamToolbox::retreiveProbabilities()
+std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes()
 {
+  /*
+    To get all the measurement outcomes for the current cell 
+  */
+
   // Iterator for getting the cell
   std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
 
   it_cells = m_cell_probabilities.find({m_cell_x, m_cell_y});
-
+  std::vector<std::vector<float>> meas_outcomes;
 
   if (it_cells != m_cell_probabilities.end())
   {
-    std::cout << "Current cell: " << it_cells->first[0] << ", " << it_cells->first[1] << std::endl;
-  
     // Exploring the measurement outcomes for the specific cell
     for (int i = 0; i < it_cells->second.size(); ++i)
     {
-      std::cout << "Measurement outcomes: ";
-      std::cout << it_cells->second[i][0] << ", " << it_cells->second[i][1] << ", " << it_cells->second[i][2] << std::endl;
+      // Free , occupied, not observed
+      meas_outcomes.push_back({it_cells->second[i][0], it_cells->second[i][1], it_cells->second[i][2]});
     }
   }
+  return meas_outcomes;
 }
 
-void LifelongSlamToolbox::appendCellProbabilities(std::vector<int> cell, std::vector<float>& probabilities)
+void LifelongSlamToolbox::appendCellProbabilities(std::vector<float>& meas_outcomes)
 {
   /*
     To append a new measurement outcome for a specific cell
@@ -426,20 +419,20 @@ void LifelongSlamToolbox::appendCellProbabilities(std::vector<int> cell, std::ve
   // Iterator for getting the cell
   std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cell;
   
-  it_cell = m_cell_probabilities.find({cell[0], cell[1]});
+  it_cell = m_cell_probabilities.find({m_cell_x, m_cell_y});
 
   if (it_cell == m_cell_probabilities.end())
   {
     // Cell is not present in the map
     m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<float>>>(
-      {cell[0], cell[1]}, 
-      {{probabilities[0], probabilities[1], probabilities[2]}}
+      {m_cell_x, m_cell_y}, 
+      {{meas_outcomes[0], meas_outcomes[1], meas_outcomes[2]}}
     ));
   }
   else
   {
     // Cell is already in the map, only add the next measurement outcome
-    it_cell->second.push_back({probabilities[0], probabilities[1], probabilities[2]});
+    it_cell->second.push_back({meas_outcomes[0], meas_outcomes[1], meas_outcomes[2]});
   }
 }
 
@@ -514,7 +507,7 @@ void LifelongSlamToolbox::inverseMeasurement(
     // std::cout << "Entropy: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
     
     std::cout << "Relative range: " << r << std::endl;
-    std::cout << " ++++++++++++++++++++++++ " << std::endl;
+    std::cout << "++++++++++++++++++++++++ " << std::endl;
   }
 }
 
@@ -556,11 +549,10 @@ std::vector<int> LifelongSlamToolbox::unhashIndex(int hash)
   return index;
 }
 
-void LifelongSlamToolbox::computeProbabilities(std::vector<int> cell, std::vector<std::vector<float>>& meas_outcm)
+void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& meas_outcm)
 {
   /*
       Input:
-          - Cell: std::vector<int>& const cell
           - Set of measurement outcomes: std::vector<std::vector<float>>& const meas_outcm
       Output
           - It should be a vector of probabilties
@@ -575,6 +567,20 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<int> cell, std::vecto
   
   // Map for the combinations and the propagated probability
   std::map<std::vector<std::vector<int>>, float> probabilities;
+  // 
+  // 10, 11
+  // {
+  //   {1, 0, 1}, => 101
+  //   {2, 0, 0},
+  //   {0, 2, 0},
+  // } 
+
+  // Hash maps -> unordered_map
+  // Key -> Array 3 <int> 
+  // Value -> Probabilidad
+  // Struct for the key : Tuple 
+
+
   // Initial condition 
   probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{0, 0, 0}}, 1.0f));
   
@@ -588,14 +594,17 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<int> cell, std::vecto
   probabilities.insert(std::pair<std::vector<std::vector<int>>, float>({{0, 0, 1}}, p_un));
 
   std::cout << p_free << ", " << p_occ << ", " << p_un << std::endl;
-  std::cout <<  "++++++++++++++++++++++++++++" << std::endl;
+  std::cout << "**********************" << std::endl;
   
   std::map<std::vector<std::vector<int>>, float>::iterator it;
-
   std::vector<int>::iterator it_combinations;
+
+  std::cout << "Prepared for loop" << std::endl; 
+
   
   for (int i = r; r < k; ++r)
   {
+    std::cout << "Not entering loop" << std::endl; 
     std::cout << "R: " << r << std::endl;
 
     // Vector for saving the cells combinations

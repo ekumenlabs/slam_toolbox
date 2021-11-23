@@ -87,9 +87,9 @@ protected:
   float calculateMapEntropy(std::vector<std::vector<float>>& grid_etp);
 
   // For algorithm 1
-  void appendCellProbabilities(std::vector<int> cell, std::vector<float>& probabilities);
-  void computeProbabilities(std::vector<int> cell, std::vector<std::vector<float>>& meas_outcm);
-  void retreiveProbabilities();
+  void appendCellProbabilities(std::vector<float>& meas_outcomes);
+  void computeProbabilities(std::vector<std::vector<float>>& meas_outcm);
+  std::vector<std::vector<float>> retreiveMeasurementOutcomes();
   std::vector<int> unhashIndex(int hash);
 
   // Data structures 
