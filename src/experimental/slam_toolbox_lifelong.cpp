@@ -161,9 +161,9 @@ void LifelongSlamToolbox::scannerTest()
 
   std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
   std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  std::vector<float> angles{-0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  // std::vector<float> angles{-0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  // std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
   // This is the initial point
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
@@ -171,7 +171,6 @@ void LifelongSlamToolbox::scannerTest()
 
   // Creating the laser scan with 5 beams ------- Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
   // std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-
 
   // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
   // for (int i = 0; i < ranges.size(); ++i)
@@ -182,10 +181,14 @@ void LifelongSlamToolbox::scannerTest()
 
     // Laser continuous distance
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
+    std::cout << "Laser hit: " << laser_grid[0] << ", " << laser_grid[1] << std::endl;
+
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
-    std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-    std::cout << "Final grid position: " << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
+    
+    // std::cout << "Laser hit: " << laser_grid[0] << ", " << laser_grid[1] << std::endl;
+    // std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
+    // std::cout << "Final grid position: " << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
 
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
@@ -201,12 +204,12 @@ void LifelongSlamToolbox::scannerTest()
     cells_x.push_back(final_grid_pos[0]);
     cells_y.push_back(final_grid_pos[1]);
 
-    // std::cout << "Cells" << std::endl;
-    // for (int c = 0; c < cells_x.size(); ++c) // One reading only
-    // {
-    //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
-    // }
-    // std::cout << "End of cells" << std::endl;
+    std::cout << "Cells" << std::endl;
+    for (int c = 0; c < cells_x.size(); ++c) // One reading only
+    {
+      std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+    }
+    std::cout << "End of cells" << std::endl;
 
 
     // std::cout << " ...---...---...---...---...---...--- " << std::endl;
@@ -216,8 +219,6 @@ void LifelongSlamToolbox::scannerTest()
     // Map entropy calculation
     // float etp = calculateMapEntropy(grid_etp);
     // std::cout << " ...---...---...---...---...---...--- " << std::endl;
-
-    std::cout << "Loop for visiting the cells " << std::endl;
 
     // Visiting the cells
     for (int j = 0; j < cells_x.size(); ++j)
@@ -246,37 +247,16 @@ void LifelongSlamToolbox::scannerTest()
 
       if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
       {
-        std::cout << "---------------------Case 1" << std::endl;
-        std::cout << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-        std::cout << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
-        
-        // std::cout << final_grid_pos[0] << ", " << robot_grid_pos[0] << std::endl;
-        // std::cout << final_grid_pos[1] << ", " << robot_grid_pos[1] << std::endl;
-
-        // X minor and Y greater. WRO final points
-        initial_x[2] = limit_x - resolution;
-        initial_x[3] = limit_x - resolution;
-
-        final_x[0] = limit_x - resolution;
-        final_x[2] = limit_x - resolution;
-
-        // min_x = limit_x - 2*resolution;
-        // max_x = limit_x - resolution;
+        // X greater and Y greater. WRO final points
+        final_x[0] = limit_x + resolution;
+        final_x[2] = limit_x + resolution;
 
         min_y = limit_y - resolution;
         max_y = limit_y;
-        
-        // min_y = limit_y;
-        // max_y = limit_y + resolution;
-        std::cout << "Points: " << initial_x[2] << ", " << initial_x[3] << ", " << final_x[0] << ", " << final_x[2] << std::endl;
-        std::cout << "Limits: " << min_x << ", " << max_x << ", " << min_y << ", " << max_y << std::endl;
       }
-
 
       if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
       {
-        std::cout << "---------------------Case 2" << std::endl;
-
         // X greater and Y minor. WRO final points
         initial_y[2] = limit_y - resolution;
         initial_y[3] = limit_y - resolution;
@@ -286,13 +266,10 @@ void LifelongSlamToolbox::scannerTest()
 
         min_y = limit_y - resolution;
         max_y = limit_y;
-        
       }
 
       if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
       {
-        std::cout << "---------------------Case 3" << std::endl;
-
         // X minor and Y minor. WRO final points
         initial_x[2] = limit_x - resolution;
         initial_x[3] = limit_x - resolution;
@@ -314,47 +291,42 @@ void LifelongSlamToolbox::scannerTest()
       std::vector<float> inter_x, inter_y;
       for (int k = 0; k < 4; ++k)
       {
-        std::cout << "----------------" << std::endl;
-
-        // std::cout << "Points: " << initial_x[k] << ", " << initial_y[k] << ", " << final_x[k] << ", " << final_y[k] << std::endl;
         std::vector<float> intersection = calculateIntersection(robot_pose, laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
         std::cout << "Intersection size: " << intersection.size() << std::endl;
         std::cout << "Initial point: " << initial_x[k] << ", " << initial_y[k] << std::endl;
         std::cout << "Final point: " << final_x[k] << ", " << final_y[k] << std::endl;
 
-
-
         if(intersection.size() != 0)
         {
-          std::cout << "Comparing values" << std::endl;
-          std::cout << abs(intersection[0]) << "," << abs(min_x - 0.001f) << std::endl;
-          std::cout << abs(intersection[0]) << "," << abs(max_x + 0.001f) << std::endl;
-          std::cout << abs(intersection[1]) << "," << abs(min_y - 0.001f) << std::endl;
-          std::cout << abs(intersection[1]) << "," << abs(max_y + 0.001f) << std::endl;
 
+          std::cout << "Comparing values" << std::endl;
+          std::cout << abs(intersection[0]) << "," << abs(min_x - 0.01f) << std::endl;
+          std::cout << abs(intersection[0]) << "," << abs(max_x + 0.01f) << std::endl;
+          std::cout << abs(intersection[1]) << "," << abs(min_y - 0.01f) << std::endl;
+          std::cout << abs(intersection[1]) << "," << abs(max_y + 0.01f) << std::endl;
+  
           std::cout << "Results" << std::endl;
-          std::cout << (abs(intersection[0]) >= abs(min_x - 0.001f)) << std::endl;
-          std::cout << (abs(intersection[0]) <= abs(max_x + 0.001f)) << std::endl;
-          std::cout << (abs(intersection[1]) >= abs(min_y - 0.001f)) << std::endl;
-          std::cout << (abs(intersection[1]) <= abs(max_y + 0.001f)) << std::endl;
+          std::cout << (abs(intersection[0]) >= abs(min_x - 0.01f)) << std::endl;
+          std::cout << (abs(intersection[0]) <= abs(max_x + 0.01f)) << std::endl;
+          std::cout << (abs(intersection[1]) >= abs(min_y - 0.01f)) << std::endl;
+          std::cout << (abs(intersection[1]) <= abs(max_y + 0.01f)) << std::endl;
 
           // If the laser and a cell intersects, we need to make sure it happens in the right bounds
-          if ((abs(intersection[0]) >= abs(min_x - 0.001f)) &&
-            (abs(intersection[0]) <= abs(max_x + 0.001f)) &&
-            (abs(intersection[1]) >= abs(min_y - 0.001f)) &&
-            (abs(intersection[1]) <= abs(max_y + 0.001f)))
+          if ((abs(intersection[0]) >= abs(min_x - 0.01f)) &&
+            (abs(intersection[0]) <= abs(max_x + 0.01f)) &&
+            (abs(intersection[1]) >= abs(min_y - 0.01f)) &&
+            (abs(intersection[1]) <= abs(max_y + 0.01f)))
           {
-            std::cout << "Intersections!!!! " << std::endl;
-
             /*
               Two points where the beam cuts the cell
               - A laser beam can cut the cell at least 1 time (Enter)
               - A laser beam can cut the cell at most 2 times (Enter an exit)
             */
-            // std::cout << "Interception at: " << intersection[0] << ", " << intersection[1] << std::endl;
             inter_x.push_back(intersection[0]);
             inter_y.push_back(intersection[1]);
           }
+
+          std::cout << " ...---...---...---...---...---...--- " << std::endl;
         }
       }
 
