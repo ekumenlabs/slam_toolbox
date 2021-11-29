@@ -97,6 +97,29 @@ protected:
   std::map<std::vector<int>, std::vector<std::vector<float>>> m_cell_probabilities;
   int m_cell_x;
   int m_cell_y;  
+
+  // Struct for cell occupancy
+  struct Occupancy
+  {
+    int fr, oc ,un;
+    
+    bool operator==(Occupancy const& st) const
+    {
+      return (st.fr == fr) && (st.oc == oc) && (st.un == un);
+    }
+    
+    struct CombinationsHash
+    {
+      std::size_t operator()(Occupancy const& key) const 
+      {
+        std::size_t hash = 5381u;
+        hash = (hash << 5) + hash + key.fr;
+        hash = (hash << 5) + hash + key.oc;
+        hash = (hash << 5) + hash + key.un;
+        return hash;
+      }
+    };
+  };
   /*****************************************************************************/
 
   bool use_tree_;
