@@ -163,7 +163,8 @@ void LifelongSlamToolbox::scannerTest()
   std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
   // std::vector<float> angles{-0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
   // std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  std::vector<float> angles{0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+  // std::vector<float> angles{0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
   // This is the initial point
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
@@ -173,22 +174,17 @@ void LifelongSlamToolbox::scannerTest()
   // std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
 
   // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
-  // for (int i = 0; i < ranges.size(); ++i)
-  for (int i = 0; i < 1; ++i) // One reading only
+  for (int i = 0; i < ranges.size(); ++i)
+  // for (int i = 0; i < 1; ++i) // One reading only
   {
     std::cout << "........ New laser ........" << std::endl;
     std::cout << "Distance: " << ranges[i] << ", Angle: " << angles[i] << std::endl;
 
     // Laser continuous distance
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
-    std::cout << "Laser hit: " << laser_grid[0] << ", " << laser_grid[1] << std::endl;
 
     // Laser final cell
     std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
-    
-    // std::cout << "Laser hit: " << laser_grid[0] << ", " << laser_grid[1] << std::endl;
-    // std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-    // std::cout << "Final grid position: " << final_grid_pos[0] << ", " << final_grid_pos[1] << std::endl;
 
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
@@ -204,21 +200,12 @@ void LifelongSlamToolbox::scannerTest()
     cells_x.push_back(final_grid_pos[0]);
     cells_y.push_back(final_grid_pos[1]);
 
-    std::cout << "Cells" << std::endl;
-    for (int c = 0; c < cells_x.size(); ++c) // One reading only
-    {
-      std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
-    }
-    std::cout << "End of cells" << std::endl;
-
-
-    // std::cout << " ...---...---...---...---...---...--- " << std::endl;
-    // For now this will not be used
-    // Cell probability, log-odds and entropy calculation
-    // inverseMeasurement(grid_prob, grid_logs, grid_etp, cells_x, cells_y, robot_grid_pos, ranges[i], angles[i], resolution);
-    // Map entropy calculation
-    // float etp = calculateMapEntropy(grid_etp);
-    // std::cout << " ...---...---...---...---...---...--- " << std::endl;
+    // std::cout << "Cells" << std::endl;
+    // for (int c = 0; c < cells_x.size(); ++c) // One reading only
+    // {
+    //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+    // }
+    // std::cout << "End of cells" << std::endl;
 
     // Visiting the cells
     for (int j = 0; j < cells_x.size(); ++j)
@@ -251,8 +238,8 @@ void LifelongSlamToolbox::scannerTest()
         final_x[0] = limit_x + resolution;
         final_x[2] = limit_x + resolution;
 
-        min_y = limit_y - resolution;
-        max_y = limit_y;
+        min_y = limit_y;
+        max_y = limit_y + resolution;
       }
 
       if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
@@ -287,30 +274,14 @@ void LifelongSlamToolbox::scannerTest()
         max_y = limit_y;
       }
 
-
       std::vector<float> inter_x, inter_y;
       for (int k = 0; k < 4; ++k)
       {
         std::vector<float> intersection = calculateIntersection(robot_pose, laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
-        std::cout << "Intersection size: " << intersection.size() << std::endl;
-        std::cout << "Initial point: " << initial_x[k] << ", " << initial_y[k] << std::endl;
-        std::cout << "Final point: " << final_x[k] << ", " << final_y[k] << std::endl;
+
 
         if(intersection.size() != 0)
         {
-
-          std::cout << "Comparing values" << std::endl;
-          std::cout << abs(intersection[0]) << "," << abs(min_x - 0.01f) << std::endl;
-          std::cout << abs(intersection[0]) << "," << abs(max_x + 0.01f) << std::endl;
-          std::cout << abs(intersection[1]) << "," << abs(min_y - 0.01f) << std::endl;
-          std::cout << abs(intersection[1]) << "," << abs(max_y + 0.01f) << std::endl;
-  
-          std::cout << "Results" << std::endl;
-          std::cout << (abs(intersection[0]) >= abs(min_x - 0.01f)) << std::endl;
-          std::cout << (abs(intersection[0]) <= abs(max_x + 0.01f)) << std::endl;
-          std::cout << (abs(intersection[1]) >= abs(min_y - 0.01f)) << std::endl;
-          std::cout << (abs(intersection[1]) <= abs(max_y + 0.01f)) << std::endl;
-
           // If the laser and a cell intersects, we need to make sure it happens in the right bounds
           if ((abs(intersection[0]) >= abs(min_x - 0.01f)) &&
             (abs(intersection[0]) <= abs(max_x + 0.01f)) &&
@@ -325,12 +296,12 @@ void LifelongSlamToolbox::scannerTest()
             inter_x.push_back(intersection[0]);
             inter_y.push_back(intersection[1]);
           }
-
-          std::cout << " ...---...---...---...---...---...--- " << std::endl;
         }
       }
 
-      std::cout << "Size: " << inter_x.size() << std::endl;
+      // When a cell is marked by Bresenham but there is not intersection points
+      if (inter_x.size() == 0) 
+        continue;
 
       // Enter (d1) and Exit (d2) distances
       std::vector<float> distances;
@@ -356,9 +327,6 @@ void LifelongSlamToolbox::scannerTest()
       // float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
       // float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
 
-      std::cout << "Debugeishon" << std::endl;
-      std::cout << "Size: " << distances.size() << std::endl;
-      
       // Measurement outcomes vector
       std::vector<float> probabilities {
         calculateProbability(distances[1], 5.0f),
@@ -489,13 +457,11 @@ void LifelongSlamToolbox::inverseMeasurement(
     // Cell is occupied
     if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
     {
-      std::cout << "Occupied" << std::endl;
       occ_prob = 0.7f;
     }
     // Cell is free
     else if (r <= range)
     {
-      std::cout << "Free" << std::endl;
       occ_prob = 0.3f;
     }
 
@@ -706,14 +672,14 @@ std::vector<float> LifelongSlamToolbox::calculateIntersection(
   if (den == 0.0f)
   {
       // Parallel lines or not intersection at all
-      std::cout << " -Parallels- " << std::endl;
+      // std::cout << " -Parallels- " << std::endl;
       return {};
   }
   else
   {
       float x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2-x1)) / den;
       float y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2-y1)) / den;
-      std::cout << "Intersection point: "<< x << ", " << y << std::endl;
+      // std::cout << "Intersection point: "<< x << ", " << y << std::endl;
       return {x, y};
   }
 }
