@@ -160,18 +160,13 @@ void LifelongSlamToolbox::scannerTest()
   std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, PI/2}, {5.6f, 6.0f, PI/2}};
 
   std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
-  std::vector<float> ranges{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  // std::vector<float> angles{-0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
-  // std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
+  std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
+  // Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
   std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
-  // std::vector<float> angles{0.43633f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
   // This is the initial point
   std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
   std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-
-  // Creating the laser scan with 5 beams ------- Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
-  // std::vector<float> ranges{2.8f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
 
   // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
   for (int i = 0; i < ranges.size(); ++i)
