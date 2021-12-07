@@ -48,6 +48,30 @@ public:
     LocalizedRangeScan * s1, LocalizedRangeScan * s2, double & x_l,
     double & x_u, double & y_l, double & y_u);
 
+public:
+  // Struct for cell occupancy
+  struct Occupancy
+  {
+    int fr, oc ,un;
+    
+    bool operator==(Occupancy const& st) const
+    {
+      return (st.fr == fr) && (st.oc == oc) && (st.un == un);
+    }
+    
+    struct CombinationsHash
+    {
+      std::size_t operator()(Occupancy const& key) const 
+      {
+        std::size_t hash = 5381u;
+        hash = (hash << 5) + hash + key.fr;
+        hash = (hash << 5) + hash + key.oc;
+        hash = (hash << 5) + hash + key.un;
+        return hash;
+      }
+    };
+  };
+
 protected:
   void laserCallback(
     sensor_msgs::msg::LaserScan::ConstSharedPtr scan) override;
@@ -79,12 +103,19 @@ protected:
   std::vector<float> getCellPosition(std::vector<int> grid_cell, float resolution);
   void inverseMeasurement(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, std::vector<std::vector<float>>& grid_etp, std::vector<int>& cells_x, std::vector<int>& cells_y, std::vector<int>& robot_grid_pos, float range, float angle, float resolution);
   void updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y);
-  float calculateLogs(float probability);
   void updateCellLogs(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, int cell_x, int cell_y, float initial_log);
-  float probabilityFromLog(float log);  // Recovering the probability
   float entropyFromProbability(float prob);
   void updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy);
   float calculateMapEntropy(std::vector<std::vector<float>>& grid_etp);
+
+  // For mutual information
+  
+  // Mutual information provisional approach
+  float measurementOutcomeEntropy(Occupancy const& meas_outcome); 
+  void recoverProbability();
+  float calculateLogs(float probability);
+  float probabilityFromLogs(float log);
+  float calculateEntropy(float probability);
 
   // For algorithm 1
   void appendCellProbabilities(std::vector<float>& meas_outcomes);
@@ -93,33 +124,10 @@ protected:
   std::vector<int> unhashIndex(int hash);
 
   // Data structures 
-  // Keep track of the probabilities for each cell
+  std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> m_un_cmb;
   std::map<std::vector<int>, std::vector<std::vector<float>>> m_cell_probabilities;
   int m_cell_x;
-  int m_cell_y;  
-
-  // Struct for cell occupancy
-  struct Occupancy
-  {
-    int fr, oc ,un;
-    
-    bool operator==(Occupancy const& st) const
-    {
-      return (st.fr == fr) && (st.oc == oc) && (st.un == un);
-    }
-    
-    struct CombinationsHash
-    {
-      std::size_t operator()(Occupancy const& key) const 
-      {
-        std::size_t hash = 5381u;
-        hash = (hash << 5) + hash + key.fr;
-        hash = (hash << 5) + hash + key.oc;
-        hash = (hash << 5) + hash + key.un;
-        return hash;
-      }
-    };
-  };
+  int m_cell_y;
   /*****************************************************************************/
 
   bool use_tree_;

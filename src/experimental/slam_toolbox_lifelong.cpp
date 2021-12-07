@@ -149,14 +149,14 @@ void LifelongSlamToolbox::scannerTest()
       grid[i][j] = 0;
       grid_prob[i][j] = unknown_prob;
       grid_logs[i][j] = initial_log;
-      grid_etp[i][j] = entropyFromProbability(probabilityFromLog(grid_logs[i][j]));
+      grid_etp[i][j] = entropyFromProbability(probabilityFromLogs(grid_logs[i][j]));
     }
   }
 
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
   // std::vector<float> robot_pose{5.6f, 6.0f, PI/4};
-  
+
   std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, PI/2}, {5.6f, 6.0f, PI/2}};
 
   std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
@@ -295,7 +295,7 @@ void LifelongSlamToolbox::scannerTest()
       }
 
       // When a cell is marked by Bresenham but there is not intersection points
-      if (inter_x.size() == 0) 
+      if (inter_x.size() == 0)
         continue;
 
       // Enter (d1) and Exit (d2) distances
@@ -340,21 +340,45 @@ void LifelongSlamToolbox::scannerTest()
       std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
 
       // Compute all the possible combinations
-      computeProbabilities(meas_outcomes);
+      computeProbabilities(meas_outcomes); // Algorithm 1
 
-      /*
-        Note for entropy
-        I am not sure if the paper is also writing it wrong, but fot all the possible measurement outcomes,
-        I do have the probability (Also the cell combinations) which is the one I can use to get the entropy.
+      std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_show;
+      std::cout << "Measurement outcomes size: " << meas_outcomes.size() << std::endl;
 
-        Also need to add new elements to one cell
-        This would be the next step.
-      */
+      float sum_carry = 0.0f;
 
-      //std::cout << "Probabilities: " << probabilities[0] << ", " << probabilities[1] << ", " << probabilities[2] << std::endl;
+      for (it_show = m_un_cmb.begin(); it_show != m_un_cmb.end(); ++it_show)
+      {
+        // Interested in the final measurement outcomes
+        if (it_show->first.fr + it_show->first.oc + it_show->first.un == meas_outcomes.size())
+        {
+          // Sum calculation from 3.12
+          sum_carry +=  it_show->second * measurementOutcomeEntropy(it_show->first);
+        }
+      }
+
+      std::cout << sum_carry << std::endl;
+
       std::cout << "++++++++++++++++++++++++" << std::endl;
     }
   }
+}
+
+float LifelongSlamToolbox::measurementOutcomeEntropy(Occupancy const& meas_outcome)
+{
+  /*
+    To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
+  */
+  float cell_logs = (meas_outcome.fr * calculateLogs(0.3f)) + (meas_outcome.oc * calculateLogs(0.7f)) + (meas_outcome.un * calculateLogs(0.5f));
+  return calculateEntropy(probabilityFromLogs(cell_logs));
+}
+
+float LifelongSlamToolbox::calculateEntropy(float probability)
+{
+  /*
+    To calculate the entropy
+  */
+  return probability * log(probability); 
 }
 
 std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes()
@@ -384,7 +408,7 @@ std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes
 void LifelongSlamToolbox::appendCellProbabilities(std::vector<float>& meas_outcomes)
 {
   /*
-    To append a new measurement outcome for a specific cell
+    To append a new measurement for a specific cell
   */
 
   // Iterator for getting the cell
@@ -462,13 +486,15 @@ void LifelongSlamToolbox::inverseMeasurement(
 
     // Update the probability
     updateCellProbability(grid_prob, occ_prob, cells_x[i], cells_y[i]);
-
     // Update the log-odds
     updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
     // Log-odds to probability
-    float entropy = entropyFromProbability(probabilityFromLog(grid_logs[cells_x[i]][cells_y[i]]));
+    float entropy = entropyFromProbability(probabilityFromLogs(grid_logs[cells_x[i]][cells_y[i]]));
+
     // Update the entropy
     updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
+
+
 
     // std::cout << "Probability: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
     // std::cout << "Log-Odds: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
@@ -485,8 +511,16 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
   /*
     To compute all the possible combinations of a grid cell, given a set of measurement outcomes
   */
-  int k = meas_outcm.size();
-  std::cout << "K: " << k << std::endl;
+
+  /*
+      1 Measurement will add one level
+
+
+  */
+
+  m_un_cmb.clear();
+  int k = meas_outcm.size(); // The number of measurements
+  // std::cout << "K: " << k << std::endl;
 
   int r = 1;
 
@@ -494,14 +528,14 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
   float p_occ = meas_outcm[0][1];
   float p_un = meas_outcm[0][0];
 
-  std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> un_cmb;
+  // std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> m_un_cmb;
   std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_un;
 
   // Initial node
-  un_cmb.insert(std::pair<Occupancy, float>({0, 0, 0}, 1.0f));
-  un_cmb.insert(std::pair<Occupancy, float>({0, 0, 1}, p_free));
-  un_cmb.insert(std::pair<Occupancy, float>({0, 1, 0}, p_occ));
-  un_cmb.insert(std::pair<Occupancy, float>({1, 0, 0}, p_un));
+  m_un_cmb.insert(std::pair<Occupancy, float>({0, 0, 0}, 1.0f));
+  m_un_cmb.insert(std::pair<Occupancy, float>({0, 0, 1}, p_free));
+  m_un_cmb.insert(std::pair<Occupancy, float>({0, 1, 0}, p_occ));
+  m_un_cmb.insert(std::pair<Occupancy, float>({1, 0, 0}, p_un));
 
   for (int i = r; r < k; ++r)
   {
@@ -510,7 +544,7 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
     std::vector<Occupancy> occ_vct;
     std::vector<float> acc_prob;
 
-    for (it_un = un_cmb.begin(); it_un != un_cmb.end(); ++it_un)
+    for (it_un = m_un_cmb.begin(); it_un != m_un_cmb.end(); ++it_un)
     {
       // Current combination state
       int fr_idx = it_un->first.fr;
@@ -571,15 +605,16 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
     // Inserting the elements into the map
     for (int k = 0; k < occ_vct.size(); ++k)
     {
-      un_cmb.insert(std::pair<Occupancy, float>(occ_vct[k], acc_prob[k]));
+      m_un_cmb.insert(std::pair<Occupancy, float>(occ_vct[k], acc_prob[k]));
     }
   }
 
-  std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_show;
-  for (it_show = un_cmb.begin(); it_show != un_cmb.end(); ++it_show)
-  {
-      std::cout << it_show->first.fr << ", " << it_show->first.oc  << ", " << it_show->first.un << ", " << it_show->second <<std::endl;
-  }
+  // For displaying
+  // std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_show;
+  // for (it_show = m_un_cmb.begin(); it_show != m_un_cmb.end(); ++it_show)
+  // {
+  //     std::cout << it_show->first.fr << ", " << it_show->first.oc  << ", " << it_show->first.un << ", " << it_show->second <<std::endl;
+  // }
 }
 
 void LifelongSlamToolbox::updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy)
@@ -595,12 +630,13 @@ float LifelongSlamToolbox::entropyFromProbability(float prob)
 {
   /*
     To calculate the cell entropy from the probability
-    - Entropy = (p*log(p) + (1-p)*log(1-p));
+    - Entropy = (p*log(p));
+    - Entropy_Old = (p*log(p) + (1-p)*log(1-p));
   */
-  return (prob * log(prob)) * ((1 - prob) * log(1 - prob));
+  return (prob * log(prob));
 }
 
-float LifelongSlamToolbox::probabilityFromLog(float log)
+float LifelongSlamToolbox::probabilityFromLogs(float log)
 {
   /*
     To transform the Log-odds into probability
@@ -715,7 +751,7 @@ float LifelongSlamToolbox::calculateProbability(float range_1, float range_2)
 
   range_1 = (range_1 > max_range) ? max_range : range_1;
   range_2 = (range_2 > max_range) ? max_range : range_2;
-  
+
   // https://www.wolframalpha.com/input/?i2d=true&i=Integrate%5Bn*c*Power%5Be%2C-c*x%5D%2C%7Bx%2Ca%2Cb%7D%5D
   return nu * (exp(-lambda*range_1) - exp(-lambda*range_2));
 }
