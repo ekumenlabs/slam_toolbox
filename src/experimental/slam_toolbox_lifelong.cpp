@@ -83,6 +83,15 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
   // in lifelong mode, we cannot have interactive mode enabled
   enable_interactive_mode_ = false;
 
+  m_resolution = 0.5f; // Map resolution
+  m_map_dist = 20.0f; // Total map distance
+  m_num_cells = static_cast<int>(m_map_dist / m_resolution);
+
+  // Grids initialization (Occupancy and Mutual information)
+  m_grid.resize(m_num_cells);
+  m_mutual_grid.resize(m_num_cells);
+  initializeGrids();
+
   scannerTest();
 }
 
@@ -126,51 +135,21 @@ void LifelongSlamToolbox::scannerTest()
 {
   RCLCPP_WARN(get_logger(), "<-------- Scanner Test -------->");
 
-  float resolution = 0.5f; // Cell resolution - 0.5m
-  float map_dist = 20.0f; // Total map distance
-  int number_cells = map_dist / resolution;
-
-  float unknown_prob = 0.5f;
-  float initial_log = calculateLogs(unknown_prob);
-  std::vector<std::vector<int>> grid(number_cells); // 20 meters in Y dimension
-  std::vector<std::vector<float>> grid_prob(number_cells); // 20 meters in Y dimension
-  std::vector<std::vector<float>> grid_logs(number_cells); // 20 meters in Y dimension
-  std::vector<std::vector<float>> grid_etp(number_cells); // 20 meters in Y dimension
-
-
-  for (int i=0; i<number_cells; ++i)
-  {
-    grid[i].resize(number_cells);
-    grid_prob[i].resize(number_cells);
-    grid_logs[i].resize(number_cells);
-    grid_etp[i].resize(number_cells);
-    for (int j=0; j<number_cells; ++j)
-    {
-      grid[i][j] = 0;
-      grid_prob[i][j] = unknown_prob;
-      grid_logs[i][j] = initial_log;
-      grid_etp[i][j] = entropyFromProbability(probabilityFromLogs(grid_logs[i][j]));
-    }
-  }
-
   // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
-  // std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
-  // std::vector<float> robot_pose{5.6f, 6.0f, PI/4};
-
   std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, PI/2}, {5.6f, 6.0f, PI/2}};
 
   std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
   std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  // Angles will be -50, -25, 0, 25, 50 //----// +-50 = +-0.87266 : +-25 = +-0.43633
+  
+  // Angles will be -50, -25, 0, 25, 50
   std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
   // This is the initial point
-  std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1], resolution);
+  std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1]);
   std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
   // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
   for (int i = 0; i < ranges.size(); ++i)
-  // for (int i = 0; i < 1; ++i) // One reading only
   {
     std::cout << "........ New laser ........" << std::endl;
     std::cout << "Distance: " << ranges[i] << ", Angle: " << angles[i] << std::endl;
@@ -179,15 +158,14 @@ void LifelongSlamToolbox::scannerTest()
     std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
 
     // Laser final cell
-    std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1], resolution);
+    std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
 
     // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
     // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
 
+    // Ray tracing for getting the visited cells
     std::vector<int> cells_x, cells_y;
     std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
-
-    // Cells visited by this laser beam
     cells_x = res_pair.first;
     cells_y = res_pair.second;
 
@@ -207,73 +185,34 @@ void LifelongSlamToolbox::scannerTest()
     {
       if ((robot_grid_pos[0] == cells_x[j]) &&  (robot_grid_pos[1] == cells_y[j]))
       {
+        // Current cell is not relevant at all
         continue;
       }
 
       // Cells visualization
       std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
 
-      float limit_x = cells_x[j] * resolution;
-      float limit_y = cells_y[j] * resolution;
-
-      std::vector<float> initial_x {limit_x, limit_x, limit_x + resolution, limit_x + resolution};
-      std::vector<float> initial_y {limit_y, limit_y, limit_y + resolution, limit_y + resolution};
-
-      std::vector<float> final_x {limit_x + resolution, limit_x, limit_x + resolution, limit_x};
-      std::vector<float> final_y {limit_y, limit_y + resolution, limit_y, limit_y + resolution};
+      // Cells limits
+      float limit_x = cells_x[j] * m_resolution;
+      float limit_y = cells_y[j] * m_resolution;
 
       float min_x = limit_x;
-      float max_x = limit_x + resolution;
+      float max_x = limit_x + m_resolution;
       float min_y = limit_y;
-      float max_y = limit_y + resolution;
+      float max_y = limit_y + m_resolution;
 
-      if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
-      {
-        // X greater and Y greater. WRO final points
-        final_x[0] = limit_x + resolution;
-        final_x[2] = limit_x + resolution;
+      std::vector<float> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
+      std::vector<float> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
 
-        min_y = limit_y;
-        max_y = limit_y + resolution;
-      }
+      std::vector<float> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
+      std::vector<float> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
 
-      if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
-      {
-        // X greater and Y minor. WRO final points
-        initial_y[2] = limit_y - resolution;
-        initial_y[3] = limit_y - resolution;
-
-        final_y[1] = limit_y - resolution;
-        final_y[3] = limit_y - resolution;
-
-        min_y = limit_y - resolution;
-        max_y = limit_y;
-      }
-
-      if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
-      {
-        // X minor and Y minor. WRO final points
-        initial_x[2] = limit_x - resolution;
-        initial_x[3] = limit_x - resolution;
-        initial_y[2] = limit_y - resolution;
-        initial_y[3] = limit_y - resolution;
-
-        final_x[0] = limit_x - resolution;
-        final_x[2] = limit_x - resolution;
-        final_y[1] = limit_y - resolution;
-        final_y[3] = limit_y - resolution;
-
-        min_x = limit_x - resolution;
-        max_x = limit_x;
-        min_y = limit_y - resolution;
-        max_y = limit_y;
-      }
+      calculateLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, min_x, max_x, min_y, max_y, robot_grid_pos, final_grid_pos);
 
       std::vector<float> inter_x, inter_y;
       for (int k = 0; k < 4; ++k)
       {
         std::vector<float> intersection = calculateIntersection(robot_pose, laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
-
 
         if(intersection.size() != 0)
         {
@@ -302,15 +241,8 @@ void LifelongSlamToolbox::scannerTest()
       std::vector<float> distances;
       for (int k = 0; k < inter_x.size(); ++k)
       {
-        /*
-          This could be a ring buffer - Actually some elements can be a ring buffer
-          dist_point[0]: d1
-          dist_point[1]: d2
-        */
         float dist_point = calculateDistance(robot_pose[0], robot_pose[1], inter_x[k], inter_y[k]);
         distances.push_back(dist_point);
-
-        // std::cout << "Distance: " << dist_point << std::endl;
       }
 
       // Integral 1: 0 to d1 which is distance from robot pose to first point where the cell is cut
@@ -318,15 +250,11 @@ void LifelongSlamToolbox::scannerTest()
       // d2 which is distance from robot pose to second point where the cell is cut
       // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
-      // float prob_not = calculateProbability(0.0f, distances[0]); // 3.8 - Does not oberserve
-      // float prob_occ = calculateProbability(distances[0], distances[1]); // 3.9 - Occupied
-      // float prob_free = calculateProbability(distances[1], 5.0f); // 3.10 - Free
-
       // Measurement outcomes vector
       std::vector<float> probabilities {
-        calculateProbability(distances[1], 5.0f),
-        calculateProbability(distances[0], distances[1]),
-        calculateProbability(0.0f, distances[0])
+        calculateProbability(distances[1], 5.0f),  // Free
+        calculateProbability(distances[0], distances[1]),  // Occupied
+        calculateProbability(0.0f, distances[0])  // Not observed
       };
 
       // Assigning the cells
@@ -336,30 +264,134 @@ void LifelongSlamToolbox::scannerTest()
       // Appending new measurement outcomes for the current cell
       appendCellProbabilities(probabilities);
 
+      // From this point the approximation should be done in a different function      
       // Get all the measurement outcomes for the current cell
       std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
+      // Compute all the possible combinations for the current cell - algorithm 1
+      computeProbabilities(meas_outcomes);
 
-      // Compute all the possible combinations
-      computeProbabilities(meas_outcomes); // Algorithm 1
-
-      std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_show;
-      std::cout << "Measurement outcomes size: " << meas_outcomes.size() << std::endl;
-
-      float sum_carry = 0.0f;
-
-      for (it_show = m_un_cmb.begin(); it_show != m_un_cmb.end(); ++it_show)
+      // Calculate 3.12
+      std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_mutual;
+      std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl; 
+      float cell_mutual_inf = 0.0f;
+      for (it_mutual = m_un_cmb.begin(); it_mutual != m_un_cmb.end(); ++it_mutual)
       {
         // Interested in the final measurement outcomes
-        if (it_show->first.fr + it_show->first.oc + it_show->first.un == meas_outcomes.size())
+        if (it_mutual->first.fr + it_mutual->first.oc + it_mutual->first.un == meas_outcomes.size())
         {
-          // Sum calculation from 3.12
-          sum_carry +=  it_show->second * measurementOutcomeEntropy(it_show->first);
+          cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
         }
       }
 
-      std::cout << sum_carry << std::endl;
-
+      /*
+        At this point I would need to calculate the H(C) as it stills and icognite here
+        
+        - I need to separate here the calculations. Which means Entropy and Mutual Information
+          must be calculated outside this loop
+        - Start documenting this section
+        - I need to add more poses and more ranges in order to see mutual information impact
+      */
+      std::cout << cell_mutual_inf << std::endl;
+      updateCellMutualInformation(cell_mutual_inf);
       std::cout << "++++++++++++++++++++++++" << std::endl;
+    }
+  }
+  float mutual = calculateMapMutualInformation();
+  std::cout << "Mutual information: " << mutual << std::endl;
+}
+
+void LifelongSlamToolbox::updateCellMutualInformation(float mut_inf_val)
+{
+  /*
+    To update the mutual information for each individual cell
+    This is the result of the summation of 3.12
+  */
+  // std::cout << "Updating cell: " << m_cell_x << ", " << m_cell_y << " , with: " << mut_inf_val << std::endl;
+  m_mutual_grid[m_cell_x][m_cell_x] = mut_inf_val;
+}
+
+float LifelongSlamToolbox::calculateMapMutualInformation()
+{
+  /*
+    To calculate map mutual information, this is the summation 
+    of all cells mutual information
+  */
+  float sum = 0.0f;
+  for (int i = 0; i < m_num_cells; ++i)
+  {
+    for (int j = 0; j < m_num_cells; ++j)
+    {
+      sum += m_mutual_grid[i][j];
+    }
+  }
+  return sum;
+}
+
+void LifelongSlamToolbox::calculateLimits(
+  std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y, 
+  float & limit_x, float & limit_y, float & min_x, float & max_x, float & min_y, float & max_y, std::vector<int> & robot_grid_pos, 
+  std::vector<int> & final_grid_pos)
+{
+  /*
+    To calculate grid grid limits for intersection
+  */
+  if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
+  {
+    // X greater and Y greater. WRO final points
+    final_x[0] = limit_x + m_resolution;
+    final_x[2] = limit_x + m_resolution;
+
+    min_y = limit_y;
+    max_y = limit_y + m_resolution;
+  }
+
+  if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+  {
+    // X greater and Y minor. WRO final points
+    initial_y[2] = limit_y - m_resolution;
+    initial_y[3] = limit_y - m_resolution;
+
+    final_y[1] = limit_y - m_resolution;
+    final_y[3] = limit_y - m_resolution;
+
+    min_y = limit_y - m_resolution;
+    max_y = limit_y;
+  }
+
+  if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+  {
+    // X minor and Y minor. WRO final points
+    initial_x[2] = limit_x - m_resolution;
+    initial_x[3] = limit_x - m_resolution;
+    initial_y[2] = limit_y - m_resolution;
+    initial_y[3] = limit_y - m_resolution;
+
+    final_x[0] = limit_x - m_resolution;
+    final_x[2] = limit_x - m_resolution;
+    final_y[1] = limit_y - m_resolution;
+    final_y[3] = limit_y - m_resolution;
+
+    min_x = limit_x - m_resolution;
+    max_x = limit_x;
+    min_y = limit_y - m_resolution;
+    max_y = limit_y;
+  }
+}
+
+void LifelongSlamToolbox::initializeGrids()
+{
+  /*
+    To create the grid
+  */
+  for (int i = 0; i < m_num_cells; ++i)
+  {
+    // Adding columns
+    m_grid[i].resize(m_num_cells);
+    m_mutual_grid[i].resize(m_num_cells);
+    for (int j = 0; j < m_num_cells; ++j)
+    {
+      m_grid[i][j] = 0;
+      m_mutual_grid[i][j] = 0.0f;
     }
   }
 }
@@ -387,7 +419,6 @@ std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes
     To get all the measurement outcomes for the current cell
   */
 
-  // Iterator for getting the cell
   std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
 
   it_cells = m_cell_probabilities.find({m_cell_x, m_cell_y});
@@ -430,92 +461,10 @@ void LifelongSlamToolbox::appendCellProbabilities(std::vector<float>& meas_outco
   }
 }
 
-float LifelongSlamToolbox::calculateMapEntropy(std::vector<std::vector<float>>& grid_etp)
-{
-  /*
-    To calculate the map entropy
-  */
-  float map_etp = 0.0f;
-  for (auto vct : grid_etp)
-  {
-    std::for_each(vct.begin(), vct.end(), [&] (float entropy) {
-      map_etp += entropy;
-    });
-  }
-  return map_etp;
-}
-
-void LifelongSlamToolbox::inverseMeasurement(
-  std::vector<std::vector<float>>& grid_prob,
-  std::vector<std::vector<float>>& grid_logs,
-  std::vector<std::vector<float>>& grid_etp,
-  std::vector<int>& cells_x,
-  std::vector<int>& cells_y,
-  std::vector<int>& robot_grid_pos,
-  float range, float angle, float resolution)
-{
-  /*
-    On this function we update a probability map based
-    We capture the cells that are hitted by the ray and the conditions
-    And we update the probability as being occupied or free
-  */
-
-  float alpha = 1.0f;
-  float max_r = 5.0f;
-
-  for (int i = 0; i < cells_x.size(); ++i) // One reading only
-  {
-    std::cout << "Cells: " << cells_x[i] << ", " << cells_y[i] << std::endl;
-    // This ditances will be calculated to the center of mass
-    // mxi - pos_x //--// myi - pos_y
-    float dx = (cells_x[i] - robot_grid_pos[0]) * resolution;
-    float dy = (cells_y[i] - robot_grid_pos[1]) * resolution;
-    float r = sqrt(pow(dx , 2) + pow(dy, 2));
-    float occ_prob = 0.5f;  // Unkwnown
-
-    // Cell is occupied
-    if ((range < max_r) && (abs(r - range) < (alpha / 2.0f)))
-    {
-      occ_prob = 0.7f;
-    }
-    // Cell is free
-    else if (r <= range)
-    {
-      occ_prob = 0.3f;
-    }
-
-    // Update the probability
-    updateCellProbability(grid_prob, occ_prob, cells_x[i], cells_y[i]);
-    // Update the log-odds
-    updateCellLogs(grid_prob, grid_logs, cells_x[i], cells_y[i], 0.0f);
-    // Log-odds to probability
-    float entropy = entropyFromProbability(probabilityFromLogs(grid_logs[cells_x[i]][cells_y[i]]));
-
-    // Update the entropy
-    updateCellEntropy(grid_etp, cells_x[i], cells_y[i], entropy);
-
-
-
-    // std::cout << "Probability: " << grid_prob[cells_x[i]][cells_y[i]] << std::endl;
-    // std::cout << "Log-Odds: " << grid_logs[cells_x[i]][cells_y[i]] << std::endl;
-    // std::cout << "Entropy: " << grid_etp[cells_x[i]][cells_y[i]] << std::endl;
-
-    std::cout << "Relative range: " << r << std::endl;
-    std::cout << "++++++++++++++++++++++++ " << std::endl;
-  }
-}
-
-
 void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& meas_outcm)
 {
   /*
     To compute all the possible combinations of a grid cell, given a set of measurement outcomes
-  */
-
-  /*
-      1 Measurement will add one level
-
-
   */
 
   m_un_cmb.clear();
@@ -608,22 +557,6 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
       m_un_cmb.insert(std::pair<Occupancy, float>(occ_vct[k], acc_prob[k]));
     }
   }
-
-  // For displaying
-  // std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_show;
-  // for (it_show = m_un_cmb.begin(); it_show != m_un_cmb.end(); ++it_show)
-  // {
-  //     std::cout << it_show->first.fr << ", " << it_show->first.oc  << ", " << it_show->first.un << ", " << it_show->second <<std::endl;
-  // }
-}
-
-void LifelongSlamToolbox::updateCellEntropy(std::vector<std::vector<float>>& grid_etp, float cell_x, float cell_y, float entropy)
-{
-  /*
-    To update the cell entropy
-    - H = H - Entropy;
-  */
-  grid_etp[cell_x][cell_y] = grid_etp[cell_x][cell_y] - entropy;
 }
 
 float LifelongSlamToolbox::entropyFromProbability(float prob)
@@ -644,39 +577,12 @@ float LifelongSlamToolbox::probabilityFromLogs(float log)
   return (exp(log) / (1 + exp(log)));
 }
 
-void LifelongSlamToolbox::updateCellLogs(std::vector<std::vector<float>>& grid_prob, std::vector<std::vector<float>>& grid_logs, int cell_x, int cell_y, float initial_log)
-{
-  /*
-    To update the log-odds matrix
-  */
-  grid_logs[cell_x][cell_y] = grid_logs[cell_x][cell_y] + calculateLogs(grid_prob[cell_x][cell_y]) - initial_log;
-}
-
-void LifelongSlamToolbox::updateCellProbability(std::vector<std::vector<float>>& grid_prob, float probability, int cell_x, int cell_y)
-{
-  /*
-    To perform the probability update at the given cell
-  */
-  grid_prob[cell_x][cell_y] = probability;
-}
-
 float LifelongSlamToolbox::calculateLogs(float probability)
 {
   /*
     To calculate the log-odds
   */
   return log(probability / (1 - probability));
-}
-
-std::vector<float> LifelongSlamToolbox::getCellPosition(std::vector<int> grid_cell, float resolution)
-{
-  /*
-    To get the current cell
-  */
-  float x = (grid_cell[0] * resolution) + (resolution / 2);
-  float y = (grid_cell[1] * resolution) + (resolution / 2);
-
-  return {x, y};
 }
 
 std::vector<float> LifelongSlamToolbox::calculateIntersection(
@@ -718,7 +624,7 @@ std::vector<float> LifelongSlamToolbox::calculateIntersection(
 float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, float y_2)
 {
   /*
-    Calculates the euclidean distance between two points
+    To calculate the euclidean distance between two points
   */
   float diff_x = x_2 - x_1;
   float diff_y = y_2 - y_1;
@@ -756,13 +662,13 @@ float LifelongSlamToolbox::calculateProbability(float range_1, float range_2)
   return nu * (exp(-lambda*range_1) - exp(-lambda*range_2));
 }
 
-std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float resolution)
+std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y)
 {
   /*
-    Maps the distance into grid coordinates
+    To maps the current position into grid coordinates
   */
-  int x_cell = floor((1 / resolution) * x);
-  int y_cell = floor((1 / resolution) * y);
+  int x_cell = floor((1 / m_resolution) * x);
+  int y_cell = floor((1 / m_resolution) * y);
 
   return {x_cell, y_cell};
 }
@@ -770,7 +676,7 @@ std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y, float re
 std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float range, float angle)
 {
   /*
-    Returns the distance where the laser beam hits something
+    To get the distance where the laser beam hits something
     Rigid Body Trasnformation from the global to the sensor frame
   */
   float x_tf = (range * cos(robot_pose[2] + angle)) + robot_pose[0];
@@ -782,7 +688,7 @@ std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& ro
 std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int x_1, int y_1, int x_2, int y_2)
 {
   /*
-    Returns the set of cells hit by a laser beam
+    To find the set of cells hit by a laser beam
   */
 	std::vector<int> x_bres;
 	std::vector<int> y_bres;
@@ -845,7 +751,7 @@ std::pair<std::vector<int>, std::vector<int>> LifelongSlamToolbox::Bresenham(int
 int LifelongSlamToolbox::getSign(int n_1, int n_2)
 {
   /*
-    Returns the sign of an operation, used for Bresenham algorithm
+    To get the sign of an operation, used for Bresenham algorithm
   */
   int difference = n_2 - n_1;
 
