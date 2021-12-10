@@ -20,9 +20,9 @@
 #define SLAM_TOOLBOX__EXPERIMENTAL__SLAM_TOOLBOX_LIFELONG_HPP_
 
 #include <memory>
+#include <cmath>
+#include <math.h>
 #include "slam_toolbox/slam_toolbox_common.hpp"
-
-#define PI 3.14159265
 
 namespace slam_toolbox
 {
@@ -111,7 +111,6 @@ protected:
   // Measurements calculations <P(free), P(Occ), P(Unk)>
   float calculateProbability(float range_1, float range_2);
   float calculateDistance(float x_1, float y_1, float x_2, float y_2);
-  float entropyFromProbability(float prob);
 
   // Mutual information 
   float measurementOutcomeEntropy(Occupancy const& meas_outcome); 
@@ -141,11 +140,9 @@ protected:
   int m_num_cells;
 
   // Robot information - Defining values just for testing
-  std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, PI/2}, {3.5f, 9.0f, 0.0f}};
+  std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, M_PI/2}, {3.5f, 9.0f, 0.0f}};
   std::vector<std::vector<float>> laser_ranges {{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 4.0f, 5.0f, 5.0f}};
   std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
-
-
 
   /*****************************************************************************/
   bool use_tree_;

@@ -19,7 +19,6 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
-#include <math.h>
 #include <stdlib.h>
 #include <unordered_map>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
@@ -260,10 +259,13 @@ void LifelongSlamToolbox::scannerTest()
         // Appending new measurement outcomes for the current cell
         appendCellProbabilities(probabilities);
 
+
+
         // Get all the measurement outcomes for the current cell
         std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
         // Compute all the possible combinations for the current cell - algorithm 1
         computeProbabilities(meas_outcomes);
+
 
         // Calculate 3.12
         std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_mutual;
@@ -281,12 +283,14 @@ void LifelongSlamToolbox::scannerTest()
         /*
           At this point I would need to calculate the H(C) as it stills and icognite here
           
+          - According to explanation provided in section 2 
           - I need to separate here the calculations. Which means Entropy and Mutual Information
             must be calculated outside this loop
           - Start documenting this section
           - I need to add more poses and more ranges in order to see mutual information impact
         */
         std::cout << cell_mutual_inf << std::endl;
+        // Here should be the H(C) = 0.5 : 0.5 - SUM(P*H)  
         updateCellMutualInformation(cell_mutual_inf);
         std::cout << "++++++++++++++++++++++++" << std::endl;
       }
@@ -295,6 +299,8 @@ void LifelongSlamToolbox::scannerTest()
     std::cout << "Mutual information: " << mutual << std::endl;
   }
 }
+
+
 
 void LifelongSlamToolbox::updateCellMutualInformation(float mut_inf_val)
 {
@@ -398,7 +404,20 @@ float LifelongSlamToolbox::measurementOutcomeEntropy(Occupancy const& meas_outco
     To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
   */
   float cell_logs = (meas_outcome.fr * calculateLogs(0.3f)) + (meas_outcome.oc * calculateLogs(0.7f)) + (meas_outcome.un * calculateLogs(0.5f));
-  return calculateEntropy(probabilityFromLogs(cell_logs));
+
+  // This is the right calculation
+  // meas_outcome.fr * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) 
+  // + meas_outcome.oc * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) 
+  // + meas_outcome.un * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)))
+
+
+  /*
+    The entropy calculation will be negative - Which is this function
+    Then the sumatory of 3.12 should be substracted
+    Mutual information should have a positive value
+  */
+  // This might be different because this summatory should be 
+  return -calculateEntropy(probabilityFromLogs(cell_logs));
 }
 
 float LifelongSlamToolbox::calculateEntropy(float probability)
@@ -406,7 +425,7 @@ float LifelongSlamToolbox::calculateEntropy(float probability)
   /*
     To calculate the entropy
   */
-  return probability * log(probability); 
+  return probability * log2(probability); 
 }
 
 std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes()
@@ -553,16 +572,6 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
       m_un_cmb.insert(std::pair<Occupancy, float>(occ_vct[k], acc_prob[k]));
     }
   }
-}
-
-float LifelongSlamToolbox::entropyFromProbability(float prob)
-{
-  /*
-    To calculate the cell entropy from the probability
-    - Entropy = (p*log(p));
-    - Entropy_Old = (p*log(p) + (1-p)*log(1-p));
-  */
-  return (prob * log(prob));
 }
 
 float LifelongSlamToolbox::probabilityFromLogs(float log)
