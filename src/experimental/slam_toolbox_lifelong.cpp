@@ -24,7 +24,6 @@
 #include <unordered_map>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
 
-#define PI 3.14159265
 
 namespace slam_toolbox
 {
@@ -133,171 +132,168 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
 
 void LifelongSlamToolbox::scannerTest()
 {
-  RCLCPP_WARN(get_logger(), "<-------- Scanner Test -------->");
-
-  // I will have 5 lasers for each reading (Located at 0, +-25, +-50)
-  std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, PI/2}, {5.6f, 6.0f, PI/2}};
-
-  std::vector<float> robot_pose{5.6f, 6.0f, PI/2};
-  std::vector<float> ranges{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}; // Maximum sensor range is 5 meters
-  
-  // Angles will be -50, -25, 0, 25, 50
-  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
-
-  // This is the initial point
-  std::vector<int> robot_grid_pos = getGridPosition(robot_pose[0], robot_pose[1]);
-  std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
-
-  // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
-  for (int i = 0; i < ranges.size(); ++i)
+  // Loop through the different robot poses
+  for (int r = 0; r < robot_poses.size(); ++r)
   {
-    std::cout << "........ New laser ........" << std::endl;
-    std::cout << "Distance: " << ranges[i] << ", Angle: " << angles[i] << std::endl;
+    std::cout << "---------- Robot pose ----------: " << r << std::endl;
 
-    // Laser continuous distance
-    std::vector<float> laser_grid = getLaserHit(robot_pose, ranges[i], angles[i]);
+    // Angles {-50, -25, 0, 25, 50} in degrees
+    std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
-    // Laser final cell
-    std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
+    // Initial point
+    std::vector<int> robot_grid_pos = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
+    std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
-    // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
-    // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
-
-    // Ray tracing for getting the visited cells
-    std::vector<int> cells_x, cells_y;
-    std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
-    cells_x = res_pair.first;
-    cells_y = res_pair.second;
-
-    // Adding last hit cell to the set
-    cells_x.push_back(final_grid_pos[0]);
-    cells_y.push_back(final_grid_pos[1]);
-
-    // std::cout << "Cells" << std::endl;
-    // for (int c = 0; c < cells_x.size(); ++c) // One reading only
-    // {
-    //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
-    // }
-    // std::cout << "End of cells" << std::endl;
-
-    // Visiting the cells
-    for (int j = 0; j < cells_x.size(); ++j)
+    // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
+    for (int i = 0; i < laser_ranges[r].size(); ++i)
     {
-      if ((robot_grid_pos[0] == cells_x[j]) &&  (robot_grid_pos[1] == cells_y[j]))
+      std::cout << "........ New laser ........" << std::endl;
+      std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
+
+      // Laser continuous distance
+      std::vector<float> laser_grid = getLaserHit(robot_poses[r], laser_ranges[r][i], angles[i]);
+
+      // Laser final cell
+      std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
+
+      // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
+      // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
+
+      // Ray tracing for getting the visited cells
+      std::vector<int> cells_x, cells_y;
+      std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
+      cells_x = res_pair.first;
+      cells_y = res_pair.second;
+
+      // Adding last hit cell to the set
+      cells_x.push_back(final_grid_pos[0]);
+      cells_y.push_back(final_grid_pos[1]);
+
+      // std::cout << "Cells" << std::endl;
+      // for (int c = 0; c < cells_x.size(); ++c) // One reading only
+      // {
+      //   std::cout << cells_x[c] << ", " << cells_y[c] << std::endl;
+      // }
+      // std::cout << "End of cells" << std::endl;
+
+      // Visiting the cells
+      for (int j = 0; j < cells_x.size(); ++j)
       {
-        // Current cell is not relevant at all
-        continue;
-      }
-
-      // Cells visualization
-      std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
-
-      // Cells limits
-      float limit_x = cells_x[j] * m_resolution;
-      float limit_y = cells_y[j] * m_resolution;
-
-      float min_x = limit_x;
-      float max_x = limit_x + m_resolution;
-      float min_y = limit_y;
-      float max_y = limit_y + m_resolution;
-
-      std::vector<float> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
-      std::vector<float> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
-
-      std::vector<float> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
-      std::vector<float> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
-
-      calculateLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, min_x, max_x, min_y, max_y, robot_grid_pos, final_grid_pos);
-
-      std::vector<float> inter_x, inter_y;
-      for (int k = 0; k < 4; ++k)
-      {
-        std::vector<float> intersection = calculateIntersection(robot_pose, laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
-
-        if(intersection.size() != 0)
+        if ((robot_grid_pos[0] == cells_x[j]) &&  (robot_grid_pos[1] == cells_y[j]))
         {
-          // If the laser and a cell intersects, we need to make sure it happens in the right bounds
-          if ((abs(intersection[0]) >= abs(min_x - 0.01f)) &&
-            (abs(intersection[0]) <= abs(max_x + 0.01f)) &&
-            (abs(intersection[1]) >= abs(min_y - 0.01f)) &&
-            (abs(intersection[1]) <= abs(max_y + 0.01f)))
+          // Current cell is not relevant at all
+          continue;
+        }
+
+        // Cells visualization
+        std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
+
+        // Cells limits
+        float limit_x = cells_x[j] * m_resolution;
+        float limit_y = cells_y[j] * m_resolution;
+
+        float min_x = limit_x;
+        float max_x = limit_x + m_resolution;
+        float min_y = limit_y;
+        float max_y = limit_y + m_resolution;
+
+        std::vector<float> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
+        std::vector<float> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
+
+        std::vector<float> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
+        std::vector<float> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
+
+        calculateLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, min_x, max_x, min_y, max_y, robot_grid_pos, final_grid_pos);
+
+        std::vector<float> inter_x, inter_y;
+        for (int k = 0; k < 4; ++k)
+        {
+          std::vector<float> intersection = calculateIntersection(robot_poses[r], laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
+
+          if(intersection.size() != 0)
           {
-            /*
-              Two points where the beam cuts the cell
-              - A laser beam can cut the cell at least 1 time (Enter)
-              - A laser beam can cut the cell at most 2 times (Enter an exit)
-            */
-            inter_x.push_back(intersection[0]);
-            inter_y.push_back(intersection[1]);
+            // If the laser and a cell intersects, we need to make sure it happens in the right bounds
+            if ((abs(intersection[0]) >= abs(min_x - 0.01f)) &&
+              (abs(intersection[0]) <= abs(max_x + 0.01f)) &&
+              (abs(intersection[1]) >= abs(min_y - 0.01f)) &&
+              (abs(intersection[1]) <= abs(max_y + 0.01f)))
+            {
+              /*
+                Two points where the beam cuts the cell
+                - A laser beam can cut the cell at least 1 time (Enter)
+                - A laser beam can cut the cell at most 2 times (Enter an exit)
+              */
+              inter_x.push_back(intersection[0]);
+              inter_y.push_back(intersection[1]);
+            }
           }
         }
-      }
 
-      // When a cell is marked by Bresenham but there is not intersection points
-      if (inter_x.size() == 0)
-        continue;
+        // When a cell is marked by Bresenham but there is not intersection points
+        if (inter_x.size() == 0)
+          continue;
 
-      // Enter (d1) and Exit (d2) distances
-      std::vector<float> distances;
-      for (int k = 0; k < inter_x.size(); ++k)
-      {
-        float dist_point = calculateDistance(robot_pose[0], robot_pose[1], inter_x[k], inter_y[k]);
-        distances.push_back(dist_point);
-      }
-
-      // Integral 1: 0 to d1 which is distance from robot pose to first point where the cell is cut
-      // Integral 2: d1 which is distance from robot pose to first point where the cell is cut to
-      // d2 which is distance from robot pose to second point where the cell is cut
-      // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
-
-      // Measurement outcomes vector
-      std::vector<float> probabilities {
-        calculateProbability(distances[1], 5.0f),  // Free
-        calculateProbability(distances[0], distances[1]),  // Occupied
-        calculateProbability(0.0f, distances[0])  // Not observed
-      };
-
-      // Assigning the cells
-      m_cell_x = cells_x[j];
-      m_cell_y = cells_y[j];
-
-      // Appending new measurement outcomes for the current cell
-      appendCellProbabilities(probabilities);
-
-      // From this point the approximation should be done in a different function      
-      // Get all the measurement outcomes for the current cell
-      std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
-      // Compute all the possible combinations for the current cell - algorithm 1
-      computeProbabilities(meas_outcomes);
-
-      // Calculate 3.12
-      std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_mutual;
-      std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl; 
-      float cell_mutual_inf = 0.0f;
-      for (it_mutual = m_un_cmb.begin(); it_mutual != m_un_cmb.end(); ++it_mutual)
-      {
-        // Interested in the final measurement outcomes
-        if (it_mutual->first.fr + it_mutual->first.oc + it_mutual->first.un == meas_outcomes.size())
+        // Enter (d1) and Exit (d2) distances
+        std::vector<float> distances;
+        for (int k = 0; k < inter_x.size(); ++k)
         {
-          cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
+          float dist_point = calculateDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
+          distances.push_back(dist_point);
         }
-      }
 
-      /*
-        At this point I would need to calculate the H(C) as it stills and icognite here
-        
-        - I need to separate here the calculations. Which means Entropy and Mutual Information
-          must be calculated outside this loop
-        - Start documenting this section
-        - I need to add more poses and more ranges in order to see mutual information impact
-      */
-      std::cout << cell_mutual_inf << std::endl;
-      updateCellMutualInformation(cell_mutual_inf);
-      std::cout << "++++++++++++++++++++++++" << std::endl;
+        // Integral 1: 0 to d1 which is distance from robot pose to first point where the cell is cut
+        // Integral 2: d1 which is distance from robot pose to first point where the cell is cut to
+        // d2 which is distance from robot pose to second point where the cell is cut
+        // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
+
+        // Measurement outcomes vector
+        std::vector<float> probabilities {
+          calculateProbability(distances[1], 5.0f),  // Free
+          calculateProbability(distances[0], distances[1]),  // Occupied
+          calculateProbability(0.0f, distances[0])  // Not observed
+        };
+
+        // Assigning the cells
+        m_cell_x = cells_x[j];
+        m_cell_y = cells_y[j];
+
+        // Appending new measurement outcomes for the current cell
+        appendCellProbabilities(probabilities);
+
+        // Get all the measurement outcomes for the current cell
+        std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
+        // Compute all the possible combinations for the current cell - algorithm 1
+        computeProbabilities(meas_outcomes);
+
+        // Calculate 3.12
+        std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_mutual;
+        std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl; 
+        float cell_mutual_inf = 0.0f;
+        for (it_mutual = m_un_cmb.begin(); it_mutual != m_un_cmb.end(); ++it_mutual)
+        {
+          // Interested in the final measurement outcomes
+          if (it_mutual->first.fr + it_mutual->first.oc + it_mutual->first.un == meas_outcomes.size())
+          {
+            cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
+          }
+        }
+
+        /*
+          At this point I would need to calculate the H(C) as it stills and icognite here
+          
+          - I need to separate here the calculations. Which means Entropy and Mutual Information
+            must be calculated outside this loop
+          - Start documenting this section
+          - I need to add more poses and more ranges in order to see mutual information impact
+        */
+        std::cout << cell_mutual_inf << std::endl;
+        updateCellMutualInformation(cell_mutual_inf);
+        std::cout << "++++++++++++++++++++++++" << std::endl;
+      }
     }
+    float mutual = calculateMapMutualInformation();
+    std::cout << "Mutual information: " << mutual << std::endl;
   }
-  float mutual = calculateMapMutualInformation();
-  std::cout << "Mutual information: " << mutual << std::endl;
 }
 
 void LifelongSlamToolbox::updateCellMutualInformation(float mut_inf_val)
