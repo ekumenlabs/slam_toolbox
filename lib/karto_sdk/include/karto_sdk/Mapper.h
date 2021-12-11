@@ -32,6 +32,7 @@
 #include "tbb/blocked_range.h"
 
 #include "Eigen/Core"
+#include "Eigen/SparseCore"
 #include "rclcpp/rclcpp.hpp"
 #include "Karto.h"  // NOLINT
 #include "nanoflann_adaptors.h"  // NOLINT
@@ -1032,13 +1033,19 @@ public:
   /**
    * Get graph stored
    */
-  virtual std::unordered_map<int, Eigen::Vector3d> * getGraph()
+  virtual const std::unordered_map<int, Eigen::Vector3d> * getGraph()
   {
     std::cout <<
       "getGraph method not implemented for this solver type. Graph visualization unavailable." <<
       std::endl;
     return nullptr;
   }
+
+  /**
+   * Get information matrix associated with the graph
+   */
+  virtual Eigen::SparseMatrix<double> GetInformationMatrix(
+      std::unordered_map<int, Eigen::Index> * /* ordering */) const = 0;
 
   /**
    * Modify a node's pose

@@ -46,7 +46,9 @@ void CeresSolver::Configure(rclcpp::Node::SharedPtr node)
   first_node_ = nodes_->end();
 
   // formulate problem
-  angle_local_parameterization_ = AngleLocalParameterization::Create();
+  local_parameterization_ = new ceres::ProductParameterization(
+      new ceres::IdentityParameterization(2),
+      AngleLocalParameterization::Create());
 
   // choose loss function default squared loss (NULL)
   loss_function_ = NULL;
@@ -182,9 +184,7 @@ void CeresSolver::Compute()
       "CeresSolver: Setting first node as a constant pose:"
       "%0.2f, %0.2f, %0.2f.", first_node_->second(0),
       first_node_->second(1), first_node_->second(2));
-    problem_->SetParameterBlockConstant(&first_node_->second(0));
-    problem_->SetParameterBlockConstant(&first_node_->second(1));
-    problem_->SetParameterBlockConstant(&first_node_->second(2));
+    problem_->SetParameterBlockConstant(first_node_->second.data());
     was_constant_set_ = !was_constant_set_;
   }
 
@@ -223,6 +223,30 @@ const karto::ScanSolver::IdPoseVector & CeresSolver::GetCorrections() const
 }
 
 /*****************************************************************************/
+Eigen::SparseMatrix<double> CeresSolver::GetInformationMatrix(
+    std::unordered_map<int, Eigen::Index> * ordering) const
+/****************************************************************************/
+{
+  if (ordering) {
+    Eigen::Index index = 0u;
+    std::vector<double*> parameter_blocks;
+    problem_->GetParameterBlocks(&parameter_blocks);
+    for (auto block : parameter_blocks) {
+      (*ordering)[(*nodes_inverted_)[block]] = index++;
+    }
+  }
+  ceres::CRSMatrix jacobian_data;
+  problem_->Evaluate(ceres::Problem::EvaluateOptions(),
+                     nullptr, nullptr, nullptr, &jacobian_data);
+  const Eigen::Index dimension = problem_->NumParameters();
+  Eigen::SparseMatrix<double> jacobian(dimension, dimension);
+  jacobian.setFromTriplets(
+      CRSMatrixIterator::begin(jacobian_data),
+      CRSMatrixIterator::end(jacobian_data));
+  return jacobian.transpose() * jacobian;
+}
+
+/*****************************************************************************/
 void CeresSolver::Clear()
 /*****************************************************************************/
 {
@@ -242,6 +266,10 @@ void CeresSolver::Reset()
     delete problem_;
   }
 
+  if (nodes_inverted_) {
+    delete nodes_inverted_;
+  }
+
   if (nodes_) {
     delete nodes_;
   }
@@ -251,11 +279,14 @@ void CeresSolver::Reset()
   }
 
   nodes_ = new std::unordered_map<int, Eigen::Vector3d>();
+  nodes_inverted_ = new std::unordered_map<double *, int>();
   blocks_ = new std::unordered_map<std::size_t, ceres::ResidualBlockId>();
   problem_ = new ceres::Problem(options_problem_);
   first_node_ = nodes_->end();
 
-  angle_local_parameterization_ = AngleLocalParameterization::Create();
+  local_parameterization_ = new ceres::ProductParameterization(
+      new ceres::IdentityParameterization(2),
+      AngleLocalParameterization::Create());
 }
 
 /*****************************************************************************/
@@ -267,13 +298,16 @@ void CeresSolver::AddNode(karto::Vertex<karto::LocalizedRangeScan> * pVertex)
     return;
   }
 
-  karto::Pose2 pose = pVertex->GetObject()->GetCorrectedPose();
-  Eigen::Vector3d pose2d(pose.GetX(), pose.GetY(), pose.GetHeading());
+  const karto::Pose2 pose = pVertex->GetObject()->GetCorrectedPose();
+  const Eigen::Vector3d pose2d(pose.GetX(), pose.GetY(), pose.GetHeading());
 
   const int id = pVertex->GetObject()->GetUniqueId();
 
   boost::mutex::scoped_lock lock(nodes_mutex_);
-  nodes_->insert(std::pair<int, Eigen::Vector3d>(id, pose2d));
+
+  nodes_->insert(std::make_pair(id, pose2d));
+  nodes_inverted_->insert(
+    std::make_pair((*nodes_)[id].data(), id));
 
   if (nodes_->size() == 1) {
     first_node_ = nodes_->find(id);
@@ -307,10 +341,9 @@ void CeresSolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan> * pEdge)
   // extract transformation
   karto::LinkInfo * pLinkInfo = (karto::LinkInfo *)(pEdge->GetLabel());
   karto::Pose2 diff = pLinkInfo->GetPoseDifference();
-  Eigen::Vector3d pose2d(diff.GetX(), diff.GetY(), diff.GetHeading());
 
   karto::Matrix3 precisionMatrix = pLinkInfo->GetCovariance().Inverse();
-  Eigen::Matrix3d sqrt_information;
+  Eigen::Matrix3d sqrt_information;  // missing decomposition?
   sqrt_information(0, 0) = precisionMatrix(0, 0);
   sqrt_information(0, 1) = sqrt_information(1, 0) = precisionMatrix(0, 1);
   sqrt_information(0, 2) = sqrt_information(2, 0) = precisionMatrix(0, 2);
@@ -319,19 +352,17 @@ void CeresSolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan> * pEdge)
   sqrt_information(2, 2) = precisionMatrix(2, 2);
 
   // populate residual and parameterization for heading normalization
-  ceres::CostFunction * cost_function = PoseGraph2dErrorTerm::Create(pose2d(0),
-      pose2d(1), pose2d(2), sqrt_information);
+  ceres::CostFunction * cost_function = PoseGraph2dErrorTerm::Create(
+      diff.GetX(), diff.GetY(), diff.GetHeading(), sqrt_information);
   ceres::ResidualBlockId block = problem_->AddResidualBlock(
     cost_function, loss_function_,
-    &node1it->second(0), &node1it->second(1), &node1it->second(2),
-    &node2it->second(0), &node2it->second(1), &node2it->second(2));
-  problem_->SetParameterization(&node1it->second(2),
-    angle_local_parameterization_);
-  problem_->SetParameterization(&node2it->second(2),
-    angle_local_parameterization_);
+    node1it->second.data(), node2it->second.data());
+  problem_->SetParameterization(
+    node1it->second.data(), local_parameterization_);
+  problem_->SetParameterization(
+    node1it->second.data(), local_parameterization_);
 
-  blocks_->insert(std::pair<std::size_t, ceres::ResidualBlockId>(
-      GetHash(node1, node2), block));
+  blocks_->insert(std::make_pair(GetHash(node1, node2), block));
 }
 
 /*****************************************************************************/
@@ -341,6 +372,8 @@ void CeresSolver::RemoveNode(kt_int32s id)
   boost::mutex::scoped_lock lock(nodes_mutex_);
   GraphIterator nodeit = nodes_->find(id);
   if (nodeit != nodes_->end()) {
+    problem_->RemoveParameterBlock(nodeit->second.data());
+    nodes_inverted_->erase(nodes_inverted_->find(nodeit->second.data()));
     nodes_->erase(nodeit);
   } else {
     RCLCPP_ERROR(node_->get_logger(), "RemoveNode: Failed to find node matching id %i",
@@ -395,10 +428,10 @@ void CeresSolver::GetNodeOrientation(const int & unique_id, double & pose)
 }
 
 /*****************************************************************************/
-std::unordered_map<int, Eigen::Vector3d> * CeresSolver::getGraph()
+const std::unordered_map<int, Eigen::Vector3d> * CeresSolver::getGraph()
 /*****************************************************************************/
 {
-  boost::mutex::scoped_lock lock(nodes_mutex_);
+  boost::mutex::scoped_lock lock(nodes_mutex_);  // useless?
   return nodes_;
 }
 

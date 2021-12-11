@@ -144,7 +144,7 @@ void LoopClosureAssistant::publishGraph()
 /*****************************************************************************/
 {
   interactive_server_->clear();
-  std::unordered_map<int, Eigen::Vector3d> * graph = solver_->getGraph();
+  const std::unordered_map<int, Eigen::Vector3d> * graph = solver_->getGraph();
 
   if (graph->size() == 0) {
     return;
@@ -161,7 +161,7 @@ void LoopClosureAssistant::publishGraph()
   visualization_msgs::msg::Marker m = vis_utils::toMarker(map_frame_,
       "slam_toolbox", 0.1, node_);
 
-  for (ConstGraphIterator it = graph->begin(); it != graph->end(); ++it) {
+  for (ConstGraphIterator it = graph->cbegin(); it != graph->cend(); ++it) {
     m.id = it->first + 1;
     m.pose.position.x = it->second(0);
     m.pose.position.y = it->second(1);

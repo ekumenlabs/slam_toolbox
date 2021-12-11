@@ -46,7 +46,10 @@ public:
   // Adds a constraint to the solver
   virtual void AddConstraint(karto::Edge<karto::LocalizedRangeScan> * pEdge);
   // Get graph stored
-  virtual std::unordered_map<int, Eigen::Vector3d> * getGraph();
+  virtual const std::unordered_map<int, Eigen::Vector3d> * getGraph();
+  // Get information matrix associated with the graph
+  virtual Eigen::SparseMatrix<double> GetInformationMatrix(
+      std::unordered_map<int, Eigen::Index> * ordering) const;
   // Removes a node from the solver correction table
   virtual void RemoveNode(kt_int32s id);
   // Removes constraints from the optimization problem
@@ -66,11 +69,12 @@ private:
   ceres::Problem::Options options_problem_;
   ceres::LossFunction * loss_function_;
   ceres::Problem * problem_;
-  ceres::LocalParameterization * angle_local_parameterization_;
+  ceres::LocalParameterization * local_parameterization_;
   bool was_constant_set_, debug_logging_;
 
   // graph
   std::unordered_map<int, Eigen::Vector3d> * nodes_;
+  std::unordered_map<double *, int> * nodes_inverted_;
   std::unordered_map<size_t, ceres::ResidualBlockId> * blocks_;
   std::unordered_map<int, Eigen::Vector3d>::iterator first_node_;
   boost::mutex nodes_mutex_;
