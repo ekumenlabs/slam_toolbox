@@ -81,16 +81,17 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
   // in lifelong mode, we cannot have interactive mode enabled
   enable_interactive_mode_ = false;
 
-  m_resolution = 0.5f; // Map resolution
-  m_map_dist = 20.0f; // Total map distance
-  m_num_cells = static_cast<int>(m_map_dist / m_resolution);
+  // m_resolution = 0.5f; // Map resolution
+  // m_map_dist = 20.0f; // Total map distance
+  // m_num_cells = static_cast<int>(m_map_dist / m_resolution);
 
   // Grids initialization (Occupancy and Mutual information)
-  m_grid.resize(m_num_cells);
-  m_mutual_grid.resize(m_num_cells);
-  initializeGrids();
+  // m_grid.resize(m_num_cells);
+  // m_mutual_grid.resize(m_num_cells);
+  // initializeGrids();
 
-  scannerTest();
+  // scannerTest();
+  TeorethicInformation information;
 }
 
 /*****************************************************************************/
@@ -150,7 +151,7 @@ void LifelongSlamToolbox::scannerTest()
       std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
 
       // Laser continuous distance
-      std::vector<float> laser_grid = getLaserHit(robot_poses[r], laser_ranges[r][i], angles[i]);
+      std::vector<float> laser_grid = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
 
       // Laser final cell
       std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
@@ -236,7 +237,7 @@ void LifelongSlamToolbox::scannerTest()
         std::vector<float> distances;
         for (int k = 0; k < inter_x.size(); ++k)
         {
-          float dist_point = calculateDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
+          float dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
           distances.push_back(dist_point);
         }
 
@@ -247,9 +248,9 @@ void LifelongSlamToolbox::scannerTest()
 
         // Measurement outcomes vector
         std::vector<float> probabilities {
-          calculateProbability(distances[1], 5.0f),  // Free
-          calculateProbability(distances[0], distances[1]),  // Occupied
-          calculateProbability(0.0f, distances[0])  // Not observed
+          probabilityFromObservation(distances[1], 5.0f),  // Free
+          probabilityFromObservation(distances[0], distances[1]),  // Occupied
+          probabilityFromObservation(0.0f, distances[0])  // Not observed
         };
 
         // Assigning the cells
@@ -268,13 +269,15 @@ void LifelongSlamToolbox::scannerTest()
 
 
         // Calculate 3.12
-        std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_mutual;
-        std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl; 
+        std::unordered_map<map_tuple, float, HashTuple>::iterator it_mutual;
+        
+        std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl;
         float cell_mutual_inf = 0.0f;
-        for (it_mutual = m_un_cmb.begin(); it_mutual != m_un_cmb.end(); ++it_mutual)
+        for (it_mutual = m_map_out.begin(); it_mutual != m_map_out.end(); ++it_mutual)
         {
           // Interested in the final measurement outcomes
-          if (it_mutual->first.fr + it_mutual->first.oc + it_mutual->first.un == meas_outcomes.size())
+          if (std::get<0>(it_mutual->first) + std::get<1>(it_mutual->first) + std::get<2>(it_mutual->first) == meas_outcomes.size())
+          // if (it_mutual->first.fr + it_mutual->first.oc + it_mutual->first.un == meas_outcomes.size())
           {
             cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
           }
@@ -282,15 +285,15 @@ void LifelongSlamToolbox::scannerTest()
 
         /*
           At this point I would need to calculate the H(C) as it stills and icognite here
-          
-          - According to explanation provided in section 2 
+
+          - According to explanation provided in section 2
           - I need to separate here the calculations. Which means Entropy and Mutual Information
             must be calculated outside this loop
           - Start documenting this section
           - I need to add more poses and more ranges in order to see mutual information impact
         */
         std::cout << cell_mutual_inf << std::endl;
-        // Here should be the H(C) = 0.5 : 0.5 - SUM(P*H)  
+        // Here should be the H(C) = 0.5 : 0.5 - SUM(P*H)
         updateCellMutualInformation(cell_mutual_inf);
         std::cout << "++++++++++++++++++++++++" << std::endl;
       }
@@ -315,7 +318,7 @@ void LifelongSlamToolbox::updateCellMutualInformation(float mut_inf_val)
 float LifelongSlamToolbox::calculateMapMutualInformation()
 {
   /*
-    To calculate map mutual information, this is the summation 
+    To calculate map mutual information, this is the summation
     of all cells mutual information
   */
   float sum = 0.0f;
@@ -330,8 +333,8 @@ float LifelongSlamToolbox::calculateMapMutualInformation()
 }
 
 void LifelongSlamToolbox::calculateLimits(
-  std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y, 
-  float & limit_x, float & limit_y, float & min_x, float & max_x, float & min_y, float & max_y, std::vector<int> & robot_grid_pos, 
+  std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y,
+  float & limit_x, float & limit_y, float & min_x, float & max_x, float & min_y, float & max_y, std::vector<int> & robot_grid_pos,
   std::vector<int> & final_grid_pos)
 {
   /*
@@ -398,26 +401,29 @@ void LifelongSlamToolbox::initializeGrids()
   }
 }
 
-float LifelongSlamToolbox::measurementOutcomeEntropy(Occupancy const& meas_outcome)
+float LifelongSlamToolbox::measurementOutcomeEntropy(map_tuple const& meas_outcome)
 {
   /*
     To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
+    Calculate Log-Odds from initial probability guess
+    Calculate the probability from those logs
+    Calculate the entropy with the retrieved probability
   */
-  float cell_logs = (meas_outcome.fr * calculateLogs(0.3f)) + (meas_outcome.oc * calculateLogs(0.7f)) + (meas_outcome.un * calculateLogs(0.5f));
+  // float cells = (std::get<0>(meas_outcome) * calculateLogs(0.3f)) + (std::get<1>(meas_outcome) * calculateLogs(0.7f)) + (std::get<2>(meas_outcome) * calculateLogs(0.5f));
 
-  // This is the right calculation
-  // meas_outcome.fr * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) 
-  // + meas_outcome.oc * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) 
-  // + meas_outcome.un * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)))
-
+  // This might change
+  float entropy = std::get<0>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) + 
+                  std::get<1>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) + 
+                  std::get<2>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)));
 
   /*
     The entropy calculation will be negative - Which is this function
     Then the sumatory of 3.12 should be substracted
     Mutual information should have a positive value
   */
-  // This might be different because this summatory should be 
-  return -calculateEntropy(probabilityFromLogs(cell_logs));
+  // This might be different because this summatory should be
+  // return -calculateEntropy(probabilityFromLogs(cell_logs));
+  return -entropy;
 }
 
 float LifelongSlamToolbox::calculateEntropy(float probability)
@@ -425,7 +431,7 @@ float LifelongSlamToolbox::calculateEntropy(float probability)
   /*
     To calculate the entropy
   */
-  return probability * log2(probability); 
+  return probability * log2(probability);
 }
 
 std::vector<std::vector<float>> LifelongSlamToolbox::retreiveMeasurementOutcomes()
@@ -482,7 +488,7 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
     To compute all the possible combinations of a grid cell, given a set of measurement outcomes
   */
 
-  m_un_cmb.clear();
+  m_map_out.clear();
   int k = meas_outcm.size(); // The number of measurements
   // std::cout << "K: " << k << std::endl;
 
@@ -492,28 +498,28 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
   float p_occ = meas_outcm[0][1];
   float p_un = meas_outcm[0][0];
 
-  // std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> m_un_cmb;
-  std::unordered_map<Occupancy, float, Occupancy::CombinationsHash>::iterator it_un;
+  std::unordered_map<map_tuple, float, HashTuple>::iterator it_out;
+  // Root
+  m_map_out.insert(map_pair(std::make_tuple(0, 0, 0), 1.0f));
 
-  // Initial node
-  m_un_cmb.insert(std::pair<Occupancy, float>({0, 0, 0}, 1.0f));
-  m_un_cmb.insert(std::pair<Occupancy, float>({0, 0, 1}, p_free));
-  m_un_cmb.insert(std::pair<Occupancy, float>({0, 1, 0}, p_occ));
-  m_un_cmb.insert(std::pair<Occupancy, float>({1, 0, 0}, p_un));
+  // First measurement
+  m_map_out.insert(map_pair(std::make_tuple(1, 0, 0), p_free));
+  m_map_out.insert(map_pair(std::make_tuple(0, 1, 0), p_occ));
+  m_map_out.insert(map_pair(std::make_tuple(0, 0, 1), p_un));
 
   for (int i = r; r < k; ++r)
   {
     std::cout << "R: " << r << std::endl;
 
-    std::vector<Occupancy> occ_vct;
+    std::vector<map_tuple> tup_vct;
     std::vector<float> acc_prob;
 
-    for (it_un = m_un_cmb.begin(); it_un != m_un_cmb.end(); ++it_un)
+    for (it_out = m_map_out.begin(); it_out != m_map_out.end(); ++it_out)
     {
-      // Current combination state
-      int fr_idx = it_un->first.fr;
-      int oc_idx = it_un->first.oc;
-      int un_idx = it_un->first.un;
+      // Index
+      int fr_idx = std::get<0>(it_out->first);
+      int oc_idx = std::get<1>(it_out->first);
+      int un_idx = std::get<2>(it_out->first);
 
       // Measurement outcome probability
       float free_prop = meas_outcm[r][0];
@@ -528,48 +534,52 @@ void LifelongSlamToolbox::computeProbabilities(std::vector<std::vector<float>>& 
         // std::cout << fr_idx << ", " << oc_idx << ", " << un_idx + 1 << std::endl;
 
         // Searching for the current combination in this level
-        auto it_comb = std::find(occ_vct.begin(), occ_vct.end(), Occupancy{fr_idx + 1, oc_idx, un_idx});
+        std::vector<map_tuple>::iterator it_comb;
+        it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx + 1, oc_idx, un_idx));
+
         // Free
-        if (it_comb != occ_vct.end())
+        if (it_comb != tup_vct.end())
         {
-          acc_prob[it_comb - occ_vct.begin()] += it_un->second * free_prop;
+          acc_prob[it_comb - tup_vct.begin()] += it_out->second * free_prop;
         }
         else
         {
-          occ_vct.push_back(Occupancy{fr_idx + 1, oc_idx, un_idx});
-          acc_prob.push_back(it_un->second * free_prop);
+          tup_vct.push_back(std::make_tuple(fr_idx + 1, oc_idx, un_idx));
+          acc_prob.push_back(it_out->second * free_prop);
         }
 
-        it_comb = std::find(occ_vct.begin(), occ_vct.end(), Occupancy{fr_idx, oc_idx + 1, un_idx});
+        it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx + 1, un_idx));
+
         // Occupied
-        if (it_comb != occ_vct.end())
+        if (it_comb != tup_vct.end())
         {
-          acc_prob[it_comb - occ_vct.begin()] += it_un->second * occ_prop;
+          acc_prob[it_comb - tup_vct.begin()] += it_out->second * occ_prop;
         }
         else
         {
-          occ_vct.push_back(Occupancy{fr_idx, oc_idx + 1, un_idx});
-          acc_prob.push_back(it_un->second * occ_prop);
+          tup_vct.push_back(std::make_tuple(fr_idx, oc_idx + 1, un_idx));
+          acc_prob.push_back(it_out->second * occ_prop);
         }
 
-        it_comb = std::find(occ_vct.begin(), occ_vct.end(), Occupancy{fr_idx, oc_idx, un_idx + 1});
+        it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx, un_idx + 1));
+
         // Unobserved
-        if (it_comb != occ_vct.end())
+        if (it_comb != tup_vct.end())
         {
-          acc_prob[it_comb - occ_vct.begin()] += it_un->second * un_prop;
+          acc_prob[it_comb - tup_vct.begin()] += it_out->second * un_prop;
         }
         else
         {
-          occ_vct.push_back(Occupancy{fr_idx, oc_idx, un_idx + 1});
-          acc_prob.push_back(it_un->second * un_prop);
+          tup_vct.push_back(std::make_tuple(fr_idx, oc_idx, un_idx + 1));
+          acc_prob.push_back(it_out->second * un_prop);
         }
       }
     }
 
     // Inserting the elements into the map
-    for (int k = 0; k < occ_vct.size(); ++k)
+    for (int k = 0; k < tup_vct.size(); ++k)
     {
-      m_un_cmb.insert(std::pair<Occupancy, float>(occ_vct[k], acc_prob[k]));
+      m_map_out.insert(map_pair(tup_vct[k], acc_prob[k]));
     }
   }
 }
@@ -626,7 +636,7 @@ std::vector<float> LifelongSlamToolbox::calculateIntersection(
   }
 }
 
-float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, float y_2)
+float LifelongSlamToolbox::euclideanDistance(float x_1, float y_1, float x_2, float y_2)
 {
   /*
     To calculate the euclidean distance between two points
@@ -637,7 +647,7 @@ float LifelongSlamToolbox::calculateDistance(float x_1, float y_1, float x_2, fl
   return sqrt(diff_x*diff_x + diff_y*diff_y);
 }
 
-float LifelongSlamToolbox::calculateProbability(float range_1, float range_2)
+float LifelongSlamToolbox::probabilityFromObservation(float range_1, float range_2)
 {
   /*
     Calculates the probability of a cell being observed by a given measurement
@@ -678,7 +688,7 @@ std::vector<int> LifelongSlamToolbox::getGridPosition(float x, float y)
   return {x_cell, y_cell};
 }
 
-std::vector<float> LifelongSlamToolbox::getLaserHit(std::vector<float> const& robot_pose, float range, float angle)
+std::vector<float> LifelongSlamToolbox::laserHitDistance(std::vector<float> const& robot_pose, float range, float angle)
 {
   /*
     To get the distance where the laser beam hits something

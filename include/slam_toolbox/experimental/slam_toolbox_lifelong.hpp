@@ -22,13 +22,18 @@
 #include <memory>
 #include <cmath>
 #include <math.h>
+#include <tuple>
 #include "slam_toolbox/slam_toolbox_common.hpp"
+#include "slam_toolbox/experimental/theoretic_information.hpp"
 
 namespace slam_toolbox
 {
 
 class LifelongSlamToolbox : public SlamToolbox
 {
+  typedef std::tuple<int, int, int> map_tuple;
+  typedef std::pair<map_tuple, float> map_pair;
+
 public:
   explicit LifelongSlamToolbox(rclcpp::NodeOptions options);
   ~LifelongSlamToolbox() {}
@@ -52,6 +57,18 @@ public:
 
 public:
   // Cell occupancy struct for unordered map
+
+  struct HashTuple
+  {
+      std::size_t operator() (map_tuple const& key) const
+      {
+          std::size_t hash = 5381u;
+          hash = (hash << 5) + hash + std::get<0>(key);
+          hash = (hash << 5) + hash + std::get<1>(key);
+          hash = (hash << 5) + hash + std::get<2>(key);
+          return hash;
+      }
+  };
   struct Occupancy
   {
     int fr, oc ,un;
@@ -104,16 +121,17 @@ protected:
   // Grid and position information
   std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
   std::vector<int> getGridPosition(float x, float y);
-  std::vector<float> getLaserHit(std::vector<float> const& robot_pose, float range, float angle);
+  std::vector<float> laserHitDistance(std::vector<float> const& robot_pose, float range, float angle);
   std::vector<float> calculateIntersection(std::vector<float> laser_start, std::vector<float> laser_end, std::vector<float> cell_start, std::vector<float> cell_end);
   int getSign(int n_1, int n_2);
 
   // Measurements calculations <P(free), P(Occ), P(Unk)>
-  float calculateProbability(float range_1, float range_2);
-  float calculateDistance(float x_1, float y_1, float x_2, float y_2);
+  float probabilityFromObservation(float range_1, float range_2);
+  float euclideanDistance(float x_1, float y_1, float x_2, float y_2);
 
   // Mutual information 
-  float measurementOutcomeEntropy(Occupancy const& meas_outcome); 
+  float measurementOutcomeEntropy(map_tuple const& meas_outcome);
+
   void recoverProbability();
   float calculateLogs(float probability);
   float probabilityFromLogs(float log);
@@ -129,6 +147,7 @@ protected:
   std::vector<int> unhashIndex(int hash);
 
   // Data structures 
+  std::unordered_map<map_tuple, float, HashTuple> m_map_out;
   std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> m_un_cmb;
   std::map<std::vector<int>, std::vector<std::vector<float>>> m_cell_probabilities;
   std::vector<std::vector<float>> m_mutual_grid;
