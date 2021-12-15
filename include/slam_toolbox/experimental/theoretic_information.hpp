@@ -67,6 +67,8 @@ private:
     std::vector<std::vector<float>> retreiveMeasurementOutcomes(std::vector<int> cell);
     std::vector<int> unhashIndex(int hash);
 
+    void clearVisitedCells();
+
 private:
     // Data structures 
     std::unordered_map<map_tuple, float, HashTuple> m_map_out;
@@ -75,14 +77,14 @@ private:
     std::vector<std::vector<int>> m_grid;
     float m_map_dist;
     float m_resolution;
-    int m_cell_x;
-    int m_cell_y;
     int m_num_cells;
 
     // Robot information - Defining values just for testing
     std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, M_PI/2}, {3.5f, 9.0f, 0.0f}};
     std::vector<std::vector<float>> laser_ranges {{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 4.0f, 5.0f, 5.0f}};
     std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+
+    std::vector<std::vector<bool>> visited_cells;
 };
 
 #endif

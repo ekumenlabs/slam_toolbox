@@ -340,11 +340,9 @@ LaserRangeFinder * SlamToolbox::getLaser(
   sensor_msgs::msg::LaserScan::ConstSharedPtr & scan)
 /*****************************************************************************/
 {
-  // RCLCPP_ERROR(get_logger(), "Here!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
   const std::string & frame = scan->header.frame_id;
   if (lasers_.find(frame) == lasers_.end()) {
     try {
-      // RCLCPP_WARN(get_logger(), "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Adding !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
       lasers_[frame] = laser_assistant_->toLaserMetadata(*scan);
       dataset_->Add(lasers_[frame].getLaser(), true);
     } catch (tf2::TransformException & e) {

@@ -11,6 +11,7 @@ TeorethicInformation::TeorethicInformation()
     // Grids initialization (Occupancy and Mutual information)
     m_grid.resize(m_num_cells);
     m_mutual_grid.resize(m_num_cells);
+    visited_cells.resize(m_num_cells);
     initializeGrids();
 
     scannerTest();
@@ -30,7 +31,9 @@ void TeorethicInformation::scannerTest()
         std::vector<int> robot_grid_pos = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
         std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
 
-        // Current yaw + beam angle: -PI/2 (-1.570795) -0.87266 = 2.44345 (-55 degrees)
+        // Set as false the current boolean map
+        clearVisitedCells();
+
         for (int i = 0; i < laser_ranges[r].size(); ++i)
         {
             std::cout << "........ New laser ........" << std::endl;
@@ -41,9 +44,6 @@ void TeorethicInformation::scannerTest()
 
             // Laser final cell
             std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
-
-            // robot_grid_pos[0] // X1 - robot_grid_pos[1] // Y1
-            // final_grid_pos[0] // X2 - final_grid_pos[1] // Y2
 
             // Ray tracing for getting the visited cells
             std::vector<int> cells_x, cells_y;
@@ -58,7 +58,13 @@ void TeorethicInformation::scannerTest()
             // Adding last hit cell to the set
             cells_x.push_back(final_grid_pos[0]);
             cells_y.push_back(final_grid_pos[1]);
-            
+
+            /*
+                We have an issue here
+                a measurement is watching two times the same cell
+                I need to find a way for avoiding that scenario
+                We can compute the average of all measurements
+            */
 
             // Visiting the cells
             for (int j = 0; j < cells_x.size(); ++j)
@@ -132,10 +138,6 @@ void TeorethicInformation::scannerTest()
                     probabilityFromObservation(0.0f, distances[0])
                 };
 
-                // Assigning the cells
-                m_cell_x = cells_x[j];
-                m_cell_y = cells_y[j];
-
                 // Appending new measurement outcomes for the current cell
                 appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
 
@@ -154,19 +156,11 @@ void TeorethicInformation::scannerTest()
                     // Interested in the final measurement outcomes
                     if (std::get<0>(it_mutual->first) + std::get<1>(it_mutual->first) + std::get<2>(it_mutual->first) == meas_outcomes.size())
                     {
-                        // measurementOutcomeEntropy is negative
                         cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
-                        // std::cout << "----------Entropy---------- " << measurementOutcomeEntropy(it_mutual->first) << std::endl;
-                        // std::cout << "----------Entropy---------- " << 0.3*log2(0.3) << std::endl;
-                        // std::cout << "----------Entropy---------- " << calculateEntropy(0.7) << std::endl;
-                        // std::cout << "----------Entropy---------- " << calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) << std::endl;
                     }
-
                 }
-
-                // Here should be the H(C) = 0.5 : 0.5 - SUM(P*H)
-                std::cout << "Cell mutual information: " << 0.5 - cell_mutual_inf << std::endl;
                 // Mutual information of cell x, y given a set of measurements
+                
                 updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
                 std::cout << "++++++++++++++++++++++++" << std::endl;
             }
@@ -176,16 +170,31 @@ void TeorethicInformation::scannerTest()
     }
 }
 
+void TeorethicInformation::clearVisitedCells()
+{
+    /*
+        To clear the visited cell
+    */
+
+    std::cout << "Clearing cells " << std::endl;
+    for (int i = 0; i < visited_cells.size(); ++i)
+    {
+        for (int j = 0; j < visited_cells[0].size(); ++j)
+        {
+            visited_cells[i][j] = false;
+        }
+    }
+}
+
 void TeorethicInformation::appendCellProbabilities(std::vector<float>& measurements, std::vector<int> cell)
 {
     /*
         To append a new measurement for a specific cell
     */
-
-    // Iterator for getting the cell
     std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cell;
 
     it_cell = m_cell_probabilities.find({cell[0], cell[1]});
+
     if (it_cell == m_cell_probabilities.end())
     {
         // Cell is not present in the map, so append it
@@ -193,14 +202,36 @@ void TeorethicInformation::appendCellProbabilities(std::vector<float>& measureme
         {cell[0], cell[1]},
         {{measurements[0], measurements[1], measurements[2]}}
         ));
+        visited_cells[cell[0]][cell[1]] = true;
     }
     else
     {
-        // Cell is already in the map, only add the next measurement outcome
-        it_cell->second.push_back({measurements[0], measurements[1], measurements[2]});
+        if(visited_cells[cell[0]][cell[1]] == true)
+        {
+            /*
+                Compare the unknown probability, the smallest it is the most information we will have
+                from the occupied or free state
+            */
+            int idx = it_cell->second.size() - 1;
+            if(measurements[2] < it_cell->second[idx][2])
+            {
+                // std::cout << "Replacing:" << it_cell->second[idx][0] << ", " << it_cell->second[idx][1] << ", " << it_cell->second[idx][2] << std::endl;
+                // std::cout << "With:" << measurements[0] << ", " << measurements[1] << ", " << measurements[2] << std::endl;
+
+                // Replacing
+                it_cell->second[idx][0] = measurements[0];
+                it_cell->second[idx][1] = measurements[1];
+                it_cell->second[idx][2] = measurements[2];
+            }
+        }
+        else
+        {
+            // Cell is already in the map, only add the next measurement outcome
+            it_cell->second.push_back({measurements[0], measurements[1], measurements[2]});
+            visited_cells[cell[0]][cell[1]] = true;
+        }
     }
 }
-
 
 std::pair<std::vector<int>, std::vector<int>> TeorethicInformation::Bresenham(int x_1, int y_1, int x_2, int y_2)
 {
@@ -534,10 +565,12 @@ void TeorethicInformation::initializeGrids()
         // Adding columns
         m_grid[i].resize(m_num_cells);
         m_mutual_grid[i].resize(m_num_cells);
+        visited_cells[i].resize(m_num_cells);
         for (int j = 0; j < m_num_cells; ++j)
         {
             m_grid[i][j] = 0;
             m_mutual_grid[i][j] = 0.0f;
+            visited_cells[i][j] = false;
         }
     }
 }
@@ -569,7 +602,6 @@ float TeorethicInformation::probabilityFromObservation(float range_1, float rang
     /*
         To calculate the probability of a cell being observed by a given measurement
     */
-
     float max_range = 5.0f;
     float lambda = 0.35f;
     float nu = 0.28f;
@@ -585,7 +617,6 @@ std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcome
     /*
         To get all the measurement outcomes for the current cell
     */
-
     std::vector<std::vector<float>> meas_outcomes;
     std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
     it_cells = m_cell_probabilities.find({cell[0], cell[1]});

@@ -55,41 +55,6 @@ public:
     LocalizedRangeScan * s1, LocalizedRangeScan * s2, double & x_l,
     double & x_u, double & y_l, double & y_u);
 
-public:
-  // Cell occupancy struct for unordered map
-
-  struct HashTuple
-  {
-      std::size_t operator() (map_tuple const& key) const
-      {
-          std::size_t hash = 5381u;
-          hash = (hash << 5) + hash + std::get<0>(key);
-          hash = (hash << 5) + hash + std::get<1>(key);
-          hash = (hash << 5) + hash + std::get<2>(key);
-          return hash;
-      }
-  };
-  struct Occupancy
-  {
-    int fr, oc ,un;
-    bool operator==(Occupancy const& st) const
-    {
-      return (st.fr == fr) && (st.oc == oc) && (st.un == un);
-    }
-    
-    struct CombinationsHash
-    {
-      std::size_t operator()(Occupancy const& key) const 
-      {
-        std::size_t hash = 5381u;
-        hash = (hash << 5) + hash + key.fr;
-        hash = (hash << 5) + hash + key.oc;
-        hash = (hash << 5) + hash + key.un;
-        return hash;
-      }
-    };
-  };
-
 protected:
   void laserCallback(
     sensor_msgs::msg::LaserScan::ConstSharedPtr scan) override;
@@ -108,62 +73,6 @@ protected:
   void updateScoresSlamGraph(const double & score, Vertex<LocalizedRangeScan> * vertex);
   void checkIsNotNormalized(const double & value);
 
-  /*******************************Implementation********************************/
-  void scannerTest();
-
-  // Grid operations
-  void initializeGrids();
-  void calculateLimits(
-    std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y, 
-    float & limit_x, float & limit_y, float & min_x, float & max_x, float & min_y, float & max_y, std::vector<int> & robot_grid_pos, 
-    std::vector<int> & final_grid_pos);
-
-  // Grid and position information
-  std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
-  std::vector<int> getGridPosition(float x, float y);
-  std::vector<float> laserHitDistance(std::vector<float> const& robot_pose, float range, float angle);
-  std::vector<float> calculateIntersection(std::vector<float> laser_start, std::vector<float> laser_end, std::vector<float> cell_start, std::vector<float> cell_end);
-  int getSign(int n_1, int n_2);
-
-  // Measurements calculations <P(free), P(Occ), P(Unk)>
-  float probabilityFromObservation(float range_1, float range_2);
-  float euclideanDistance(float x_1, float y_1, float x_2, float y_2);
-
-  // Mutual information 
-  float measurementOutcomeEntropy(map_tuple const& meas_outcome);
-
-  void recoverProbability();
-  float calculateLogs(float probability);
-  float probabilityFromLogs(float log);
-  float calculateEntropy(float probability);
-
-  float calculateMapMutualInformation();
-  void updateCellMutualInformation(float mut_inf_val);
-
-  // Measurement outcomes probabilities
-  void appendCellProbabilities(std::vector<float>& meas_outcomes);
-  void computeProbabilities(std::vector<std::vector<float>>& meas_outcm);
-  std::vector<std::vector<float>> retreiveMeasurementOutcomes();
-  std::vector<int> unhashIndex(int hash);
-
-  // Data structures 
-  std::unordered_map<map_tuple, float, HashTuple> m_map_out;
-  std::unordered_map<Occupancy, float, Occupancy::CombinationsHash> m_un_cmb;
-  std::map<std::vector<int>, std::vector<std::vector<float>>> m_cell_probabilities;
-  std::vector<std::vector<float>> m_mutual_grid;
-  std::vector<std::vector<int>> m_grid;
-  float m_map_dist;
-  float m_resolution;
-  int m_cell_x;
-  int m_cell_y;
-  int m_num_cells;
-
-  // Robot information - Defining values just for testing
-  std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, M_PI/2}, {3.5f, 9.0f, 0.0f}};
-  std::vector<std::vector<float>> laser_ranges {{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 4.0f, 5.0f, 5.0f}};
-  std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
-
-  /*****************************************************************************/
   bool use_tree_;
   double iou_thresh_;
   double removal_score_;
