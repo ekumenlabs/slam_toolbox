@@ -18,11 +18,7 @@
 
 #include <algorithm>
 #include <memory>
-#include <vector>
-#include <stdlib.h>
-#include <unordered_map>
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
-
 
 namespace slam_toolbox
 {
