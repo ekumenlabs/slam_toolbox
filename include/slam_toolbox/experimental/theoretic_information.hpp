@@ -45,7 +45,7 @@ private:
     std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
     std::vector<int> getGridPosition(float x, float y);
     std::vector<float> laserHitDistance(std::vector<float> const& robot_pose, float range, float angle);
-    std::vector<float> calculateCellIntersectionPoints(std::vector<float> & laser_start, std::vector<float> & laser_end, std::vector<float> & cell_start, std::vector<float> & cell_end);
+    std::vector<float> calculateCellIntersectionPoints(std::vector<float> & laser_start, std::vector<float> & laser_end, std::vector<float> cell_start, std::vector<float> cell_end);
     int getSign(int n_1, int n_2);
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
@@ -59,12 +59,12 @@ private:
     float measurementOutcomeEntropy(map_tuple const& meas_outcome);
     float probabilityFromLogs(float log);
     void recoverProbability();
-    void updateCellMutualInformation(float mut_inf);
+    void updateCellMutualInformation(float mut_inf, std::vector<int> cell);
 
     // Measurement outcomes probabilities
-    void appendCellProbabilities(std::vector<float>& measurements);
-    void computeProbabilities(std::vector<std::vector<float>>& meas_outcm);
-    std::vector<std::vector<float>> retreiveMeasurementOutcomes();
+    void appendCellProbabilities(std::vector<float>& measurements, std::vector<int> cell);
+    std::unordered_map<map_tuple, float, HashTuple> computeProbabilities(std::vector<std::vector<float>>& meas_outcm);
+    std::vector<std::vector<float>> retreiveMeasurementOutcomes(std::vector<int> cell);
     std::vector<int> unhashIndex(int hash);
 
 private:

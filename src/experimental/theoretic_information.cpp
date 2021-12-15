@@ -115,6 +115,7 @@ void TeorethicInformation::scannerTest()
                 std::vector<float> distances;
                 for (int k = 0; k < inter_x.size(); ++k)
                 {
+                    // From robot position to intersection points
                     float dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
                     distances.push_back(dist_point);
                 }
@@ -124,11 +125,11 @@ void TeorethicInformation::scannerTest()
                 // d2 which is distance from robot pose to second point where the cell is cut
                 // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
-                // Measurement outcomes vector
+                // Measurement outcomes vector {Pfree, Pocc, Pun}
                 std::vector<float> probabilities {
-                    probabilityFromObservation(distances[1], 5.0f),  // Free
-                    probabilityFromObservation(distances[0], distances[1]),  // Occupied
-                    probabilityFromObservation(0.0f, distances[0])  // Not observed
+                    probabilityFromObservation(distances[1], 5.0f),
+                    probabilityFromObservation(distances[0], distances[1]),
+                    probabilityFromObservation(0.0f, distances[0])
                 };
 
                 // Assigning the cells
@@ -136,30 +137,37 @@ void TeorethicInformation::scannerTest()
                 m_cell_y = cells_y[j];
 
                 // Appending new measurement outcomes for the current cell
-                appendCellProbabilities(probabilities);
+                appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
 
                 // Get all the measurement outcomes for the current cell
-                std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes();
+                std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes({cells_x[j], cells_y[j]});
+
                 // Compute all the possible combinations for the current cell - algorithm 1
-                computeProbabilities(meas_outcomes);
+                std::unordered_map<map_tuple, float, HashTuple> meas_out_prob = computeProbabilities(meas_outcomes);
 
                 // Calculate 3.12
                 std::unordered_map<map_tuple, float, HashTuple>::iterator it_mutual;
-                
                 std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl;
                 float cell_mutual_inf = 0.0f;
-                for (it_mutual = m_map_out.begin(); it_mutual != m_map_out.end(); ++it_mutual)
+                for (it_mutual = meas_out_prob.begin(); it_mutual != meas_out_prob.end(); ++it_mutual)
                 {
                     // Interested in the final measurement outcomes
                     if (std::get<0>(it_mutual->first) + std::get<1>(it_mutual->first) + std::get<2>(it_mutual->first) == meas_outcomes.size())
                     {
+                        // measurementOutcomeEntropy is negative
                         cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
+                        // std::cout << "----------Entropy---------- " << measurementOutcomeEntropy(it_mutual->first) << std::endl;
+                        // std::cout << "----------Entropy---------- " << 0.3*log2(0.3) << std::endl;
+                        // std::cout << "----------Entropy---------- " << calculateEntropy(0.7) << std::endl;
+                        // std::cout << "----------Entropy---------- " << calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) << std::endl;
                     }
+
                 }
 
-                std::cout << cell_mutual_inf << std::endl;
                 // Here should be the H(C) = 0.5 : 0.5 - SUM(P*H)
-                updateCellMutualInformation(cell_mutual_inf);
+                std::cout << "Cell mutual information: " << 0.5 - cell_mutual_inf << std::endl;
+                // Mutual information of cell x, y given a set of measurements
+                updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
                 std::cout << "++++++++++++++++++++++++" << std::endl;
             }
         }
@@ -168,7 +176,7 @@ void TeorethicInformation::scannerTest()
     }
 }
 
-void TeorethicInformation::appendCellProbabilities(std::vector<float>& measurements)
+void TeorethicInformation::appendCellProbabilities(std::vector<float>& measurements, std::vector<int> cell)
 {
     /*
         To append a new measurement for a specific cell
@@ -177,12 +185,12 @@ void TeorethicInformation::appendCellProbabilities(std::vector<float>& measureme
     // Iterator for getting the cell
     std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cell;
 
-    it_cell = m_cell_probabilities.find({m_cell_x, m_cell_y});
+    it_cell = m_cell_probabilities.find({cell[0], cell[1]});
     if (it_cell == m_cell_probabilities.end())
     {
-        // Cell is not present in the map
+        // Cell is not present in the map, so append it
         m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<float>>>(
-        {m_cell_x, m_cell_y},
+        {cell[0], cell[1]},
         {{measurements[0], measurements[1], measurements[2]}}
         ));
     }
@@ -268,7 +276,7 @@ float TeorethicInformation::calculateEntropy(float probability)
 
 std::vector<float> TeorethicInformation::calculateCellIntersectionPoints(
     std::vector<float> & laser_start, std::vector<float> & laser_end,
-    std::vector<float> & cell_start, std::vector<float> & cell_end)
+    std::vector<float> cell_start, std::vector<float> cell_end)
 {
     /*
         Initial point laser beam: laser_start
@@ -375,13 +383,13 @@ float TeorethicInformation::calculateMapMutualInformation()
     return sum;
 }
 
-void TeorethicInformation::computeProbabilities(std::vector<std::vector<float>>& meas_outcm)
+std::unordered_map<TeorethicInformation::map_tuple, float, TeorethicInformation::HashTuple> TeorethicInformation::computeProbabilities(std::vector<std::vector<float>>& meas_outcm)
 {
     /*
         To compute all the possible combinations of a grid cell, given a set of measurement outcomes
     */
     // Cleaning measurement outcomes map
-    m_map_out.clear();
+    std::unordered_map<map_tuple, float, HashTuple> map_out;
     std::unordered_map<map_tuple, float, HashTuple>::iterator it_out;
 
     // The number of measurements
@@ -393,19 +401,19 @@ void TeorethicInformation::computeProbabilities(std::vector<std::vector<float>>&
     float p_un = meas_outcm[0][0];
 
     // Root
-    m_map_out.insert(map_pair(std::make_tuple(0, 0, 0), 1.0f));
+    map_out.insert(map_pair(std::make_tuple(0, 0, 0), 1.0f));
 
     // First measurement
-    m_map_out.insert(map_pair(std::make_tuple(1, 0, 0), p_free));
-    m_map_out.insert(map_pair(std::make_tuple(0, 1, 0), p_occ));
-    m_map_out.insert(map_pair(std::make_tuple(0, 0, 1), p_un));
+    map_out.insert(map_pair(std::make_tuple(1, 0, 0), p_free));
+    map_out.insert(map_pair(std::make_tuple(0, 1, 0), p_occ));
+    map_out.insert(map_pair(std::make_tuple(0, 0, 1), p_un));
 
     for (int i = r; r < k; ++r)
     {
         std::vector<map_tuple> tup_vct;
         std::vector<float> acc_prob;
 
-        for (it_out = m_map_out.begin(); it_out != m_map_out.end(); ++it_out)
+        for (it_out = map_out.begin(); it_out != map_out.end(); ++it_out)
         {
             // Index
             int fr_idx = std::get<0>(it_out->first);
@@ -464,9 +472,10 @@ void TeorethicInformation::computeProbabilities(std::vector<std::vector<float>>&
         // Inserting the elements into the map
         for (int k = 0; k < tup_vct.size(); ++k)
         {
-            m_map_out.insert(map_pair(tup_vct[k], acc_prob[k]));
+            map_out.insert(map_pair(tup_vct[k], acc_prob[k]));
         }
     }
+    return map_out;
 }
 
 float TeorethicInformation::euclideanDistance(float x_1, float y_1, float x_2, float y_2)
@@ -544,7 +553,7 @@ float TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_outc
     float entropy = std::get<0>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) + 
                     std::get<1>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) + 
                     std::get<2>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)));
-    return -entropy;
+    return entropy;
 }
 
 float TeorethicInformation::probabilityFromLogs(float log)
@@ -571,23 +580,22 @@ float TeorethicInformation::probabilityFromObservation(float range_1, float rang
     return nu * (exp(-lambda*range_1) - exp(-lambda*range_2));
 }
 
-std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcomes()
+std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcomes(std::vector<int> cell)
 {
     /*
         To get all the measurement outcomes for the current cell
     */
 
-    std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
-
-    it_cells = m_cell_probabilities.find({m_cell_x, m_cell_y});
     std::vector<std::vector<float>> meas_outcomes;
+    std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
+    it_cells = m_cell_probabilities.find({cell[0], cell[1]});
 
     if (it_cells != m_cell_probabilities.end())
     {
         // Exploring the measurement outcomes for the specific cell
         for (int i = 0; i < it_cells->second.size(); ++i)
         {
-            // Free , occupied, not observed
+            // Append the measurement outcomes for the current cell
             meas_outcomes.push_back({it_cells->second[i][0], it_cells->second[i][1], it_cells->second[i][2]});
         }
     }
@@ -595,11 +603,11 @@ std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcome
 }
 
 
-void TeorethicInformation::updateCellMutualInformation(float mut_inf)
+void TeorethicInformation::updateCellMutualInformation(float mut_inf, std::vector<int> cell)
 {
     /*
         To update the mutual information for each individual cell
         This is the result of the summation of 3.12
     */
-    m_mutual_grid[m_cell_x][m_cell_x] = mut_inf;
+    m_mutual_grid[cell[0]][cell[1]] = mut_inf;
 }
