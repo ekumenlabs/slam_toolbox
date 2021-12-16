@@ -19,10 +19,23 @@ TeorethicInformation::TeorethicInformation()
 
 void TeorethicInformation::scannerTest()
 {
+    /*
+        La lectura de menor ganancia
+
+        Dado uno computamos el score - Esta informacion esta en el toolbox
+        Buscar scans en el mismo rango de vision
+
+        // Set -> information
+        // Nodo -> Que tanta ganancia aporta (Ganancia de informacion)
+        Batch elimination (Hiteresis) - Groups
+
+        Lista de adyacencia
+    */
+
     // Loop through the different robot poses
     for (int r = 0; r < robot_poses.size(); ++r)
     {
-        std::cout << "---------- Robot pose ----------: " << r << std::endl;
+        std::cout << "-------------------- Robot pose --------------------: " << r << std::endl;
 
         // Angles {-50, -25, 0, 25, 50} in degrees
         std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
@@ -36,7 +49,7 @@ void TeorethicInformation::scannerTest()
 
         for (int i = 0; i < laser_ranges[r].size(); ++i)
         {
-            std::cout << "........ New laser ........" << std::endl;
+            std::cout << "................ New laser ................" << std::endl;
             std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
 
             // Laser continuous distance
@@ -59,13 +72,6 @@ void TeorethicInformation::scannerTest()
             cells_x.push_back(final_grid_pos[0]);
             cells_y.push_back(final_grid_pos[1]);
 
-            /*
-                We have an issue here
-                a measurement is watching two times the same cell
-                I need to find a way for avoiding that scenario
-                We can compute the average of all measurements
-            */
-
             // Visiting the cells
             for (int j = 0; j < cells_x.size(); ++j)
             {
@@ -73,34 +79,36 @@ void TeorethicInformation::scannerTest()
                 std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
 
                 // Inidividual cell limits
-                float limit_x = cells_x[j] * m_resolution;
-                float limit_y = cells_y[j] * m_resolution;
+                double limit_x = cells_x[j] * m_resolution;
+                double limit_y = cells_y[j] * m_resolution;
 
                 // Cell limits: min_x, max_x, min_y, max_y
-                std::vector<float> cell_limits {limit_x, limit_x + m_resolution, limit_y, limit_y + m_resolution};
+                std::vector<double> cell_limits {limit_x, limit_x + m_resolution, limit_y, limit_y + m_resolution};
 
                 // Initial points for each of the 4 corners
-                std::vector<float> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
-                std::vector<float> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
+                std::vector<double> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
+                std::vector<double> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
                 
                 // Final points for each of the 4 corners
-                std::vector<float> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
-                std::vector<float> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
+                std::vector<double> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
+                std::vector<double> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
 
                 // Set the new cell limits
+
+                // Need to take care of this function
                 updateCellLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, cell_limits, robot_grid_pos, final_grid_pos);
 
-                std::vector<float> inter_x, inter_y;
+                std::vector<double> inter_x, inter_y;
+
                 for (int k = 0; k < 4; ++k)
                 {
-                    std::vector<float> intersection = calculateCellIntersectionPoints(robot_poses[r], laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
+                    std::vector<double> intersection = calculateCellIntersectionPoints(robot_poses[r], laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
                     if(intersection.size() != 0)
                     {
-                        // If the laser and a cell intersects, we need to make sure it happens in the right bounds
-                        if ((abs(intersection[0]) >= abs(cell_limits[0] - 0.01f)) &&
-                        (abs(intersection[0]) <= abs(cell_limits[1] + 0.01f)) &&
-                        (abs(intersection[1]) >= abs(cell_limits[2] - 0.01f)) &&
-                        (abs(intersection[1]) <= abs(cell_limits[3] + 0.01f)))
+                        if ((fabs(intersection[0]) >= (fabs(cell_limits[0]) - 0.001)) &&
+                        (fabs(intersection[0]) <= (fabs(cell_limits[1]) + 0.001)) &&
+                        (fabs(intersection[1]) >= (fabs(cell_limits[2]) - 0.001)) &&
+                        (fabs(intersection[1]) <= (fabs(cell_limits[3]) + 0.001)))
                         {
                             /*
                                 Two points where the beam cuts the cell
@@ -112,7 +120,6 @@ void TeorethicInformation::scannerTest()
                         }
                     }
                 }
-
                 // When a cell is marked by Bresenham but there is not intersection points
                 if (inter_x.size() == 0)
                     continue;
@@ -305,9 +312,9 @@ float TeorethicInformation::calculateEntropy(float probability)
 }
 
 
-std::vector<float> TeorethicInformation::calculateCellIntersectionPoints(
+std::vector<double> TeorethicInformation::calculateCellIntersectionPoints(
     std::vector<float> & laser_start, std::vector<float> & laser_end,
-    std::vector<float> cell_start, std::vector<float> cell_end)
+    std::vector<double> cell_start, std::vector<double> cell_end)
 {
     /*
         Initial point laser beam: laser_start
@@ -315,17 +322,17 @@ std::vector<float> TeorethicInformation::calculateCellIntersectionPoints(
         Initial point cell: cell_start
         Final point cell: cell_end
     */
-    float x1 = laser_start[0];
-    float x2 = laser_end[0];
-    float x3 = cell_start[0];
-    float x4 = cell_end[0];
+    double x1 = laser_start[0];
+    double x2 = laser_end[0];
+    double x3 = cell_start[0];
+    double x4 = cell_end[0];
 
-    float y1 = laser_start[1];
-    float y2 = laser_end[1];
-    float y3 = cell_start[1];
-    float y4 = cell_end[1];
+    double y1 = laser_start[1];
+    double y2 = laser_end[1];
+    double y3 = cell_start[1];
+    double y4 = cell_end[1];
 
-    float den = ((x2-x1)*(y4-y3) - (x4-x3)*(y2-y1));
+    double den = ((x2-x1)*(y4-y3) - (x4-x3)*(y2-y1));
     if (den == 0.0f)
     {
         // Parallel lines or not intersection at all
@@ -333,15 +340,15 @@ std::vector<float> TeorethicInformation::calculateCellIntersectionPoints(
     }
     else
     {
-        float x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2-x1)) / den;
-        float y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2-y1)) / den;
+        double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2-x1)) / den;
+        double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2-y1)) / den;
         return {x, y};
     }
 }
 
 void TeorethicInformation::updateCellLimits(
-    std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y,
-    float & limit_x, float & limit_y, std::vector<float> & cell_limits, std::vector<int> & robot_grid_pos, std::vector<int> & final_grid_pos)
+    std::vector<double> & initial_x, std::vector<double> & initial_y, std::vector<double> & final_x, std::vector<double> & final_y,
+    double & limit_x, double & limit_y, std::vector<double> & cell_limits, std::vector<int> & robot_grid_pos, std::vector<int> & final_grid_pos)
 {
     /*
         To calculate grid grid limits for intersection

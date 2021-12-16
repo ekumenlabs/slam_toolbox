@@ -38,14 +38,14 @@ private:
     // Grid operations
     void initializeGrids();
     void updateCellLimits(
-        std::vector<float> & initial_x, std::vector<float> & initial_y, std::vector<float> & final_x, std::vector<float> & final_y, 
-        float & limit_x, float & limit_y, std::vector<float> & cell_limits, std::vector<int> & robot_grid_pos, std::vector<int> & final_grid_pos);
+        std::vector<double> & initial_x, std::vector<double> & initial_y, std::vector<double> & final_x, std::vector<double> & final_y, 
+        double & limit_x, double & limit_y, std::vector<double> & cell_limits, std::vector<int> & robot_grid_pos, std::vector<int> & final_grid_pos);
 
     // Grid and position information
     std::pair<std::vector<int>, std::vector<int>> Bresenham(int x_1, int y_1, int x_2, int y_2);
     std::vector<int> getGridPosition(float x, float y);
     std::vector<float> laserHitDistance(std::vector<float> const& robot_pose, float range, float angle);
-    std::vector<float> calculateCellIntersectionPoints(std::vector<float> & laser_start, std::vector<float> & laser_end, std::vector<float> cell_start, std::vector<float> cell_end);
+    std::vector<double> calculateCellIntersectionPoints(std::vector<float> & laser_start, std::vector<float> & laser_end, std::vector<double> cell_start, std::vector<double> cell_end);
     int getSign(int n_1, int n_2);
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
@@ -80,8 +80,11 @@ private:
     int m_num_cells;
 
     // Robot information - Defining values just for testing
+    // std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, M_PI/2}, {7.75f, 9.22f, -M_PI/2}};
+    // std::vector<std::vector<float>> robot_poses {{7.75f, 9.22f, -M_PI/2}, {3.5f, 9.0f, 0.0f}};
     std::vector<std::vector<float>> robot_poses {{5.6f, 6.0f, M_PI/2}, {3.5f, 9.0f, 0.0f}};
     std::vector<std::vector<float>> laser_ranges {{1.65f, 5.0f, 5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 4.0f, 5.0f, 5.0f}};
+    // std::vector<std::vector<float>> laser_ranges {{5.0f, 5.0f, 5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 4.0f, 5.0f, 5.0f}};
     std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
     std::vector<std::vector<bool>> visited_cells;
