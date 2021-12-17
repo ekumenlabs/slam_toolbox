@@ -38,7 +38,7 @@ void TeorethicInformation::scannerTest()
         std::cout << "-------------------- Robot pose --------------------: " << r << std::endl;
 
         // Angles {-50, -25, 0, 25, 50} in degrees
-        std::vector<float> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+        std::vector<double> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
         // Initial point
         std::vector<int> robot_grid_pos = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
@@ -53,7 +53,7 @@ void TeorethicInformation::scannerTest()
             std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
 
             // Laser continuous distance
-            std::vector<float> laser_grid = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
+            std::vector<double> laser_grid = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
 
             // Laser final cell
             std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
@@ -125,11 +125,11 @@ void TeorethicInformation::scannerTest()
                     continue;
 
                 // Enter (d1) and Exit (d2) distances
-                std::vector<float> distances;
+                std::vector<double> distances;
                 for (int k = 0; k < inter_x.size(); ++k)
                 {
                     // From robot position to intersection points
-                    float dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
+                    double dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
                     distances.push_back(dist_point);
                 }
 
@@ -139,7 +139,7 @@ void TeorethicInformation::scannerTest()
                 // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
                 // Measurement outcomes vector {Pfree, Pocc, Pun}
-                std::vector<float> probabilities {
+                std::vector<double> probabilities {
                     probabilityFromObservation(distances[1], 5.0f),
                     probabilityFromObservation(distances[0], distances[1]),
                     probabilityFromObservation(0.0f, distances[0])
@@ -149,30 +149,28 @@ void TeorethicInformation::scannerTest()
                 appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
 
                 // Get all the measurement outcomes for the current cell
-                std::vector<std::vector<float>> meas_outcomes = retreiveMeasurementOutcomes({cells_x[j], cells_y[j]});
+                std::vector<std::vector<double>> meas_outcomes = retreiveMeasurementOutcomes({cells_x[j], cells_y[j]});
 
                 // Compute all the possible combinations for the current cell - algorithm 1
-                std::unordered_map<map_tuple, float, HashTuple> meas_out_prob = computeProbabilities(meas_outcomes);
-
+                std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(meas_outcomes);
+                
                 // Calculate 3.12
-                std::unordered_map<map_tuple, float, HashTuple>::iterator it_mutual;
-                std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl;
-                float cell_mutual_inf = 0.0f;
+                std::unordered_map<map_tuple, double, HashTuple>::iterator it_mutual;
+
+                // std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl;
+                
+                double cell_mutual_inf = 0.0f;
                 for (it_mutual = meas_out_prob.begin(); it_mutual != meas_out_prob.end(); ++it_mutual)
                 {
-                    // Interested in the final measurement outcomes
-                    if (std::get<0>(it_mutual->first) + std::get<1>(it_mutual->first) + std::get<2>(it_mutual->first) == meas_outcomes.size())
-                    {
-                        cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
-                    }
+                    cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
                 }
-                // Mutual information of cell x, y given a set of measurements
-                
+
+                // Mutual information of cell x, y given a set of measurements                
                 updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
                 std::cout << "++++++++++++++++++++++++" << std::endl;
             }
         }
-        float mutual = calculateMapMutualInformation();
+        double mutual = calculateMapMutualInformation();
         std::cout << "Mutual information: " << mutual << std::endl;
     }
 }
@@ -193,19 +191,19 @@ void TeorethicInformation::clearVisitedCells()
     }
 }
 
-void TeorethicInformation::appendCellProbabilities(std::vector<float>& measurements, std::vector<int> cell)
+void TeorethicInformation::appendCellProbabilities(std::vector<double>& measurements, std::vector<int> cell)
 {
     /*
         To append a new measurement for a specific cell
     */
-    std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cell;
+    std::map<std::vector<int>, std::vector<std::vector<double>>>::iterator it_cell;
 
     it_cell = m_cell_probabilities.find({cell[0], cell[1]});
 
     if (it_cell == m_cell_probabilities.end())
     {
         // Cell is not present in the map, so append it
-        m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<float>>>(
+        m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<double>>>(
         {cell[0], cell[1]},
         {{measurements[0], measurements[1], measurements[2]}}
         ));
@@ -303,7 +301,7 @@ std::pair<std::vector<int>, std::vector<int>> TeorethicInformation::Bresenham(in
     return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
 }
 
-float TeorethicInformation::calculateEntropy(float probability)
+double TeorethicInformation::calculateEntropy(double probability)
 {
     /*
         To calculate the entropy
@@ -313,7 +311,7 @@ float TeorethicInformation::calculateEntropy(float probability)
 
 
 std::vector<double> TeorethicInformation::calculateCellIntersectionPoints(
-    std::vector<float> & laser_start, std::vector<float> & laser_end,
+    std::vector<double> & laser_start, std::vector<double> & laser_end,
     std::vector<double> cell_start, std::vector<double> cell_end)
 {
     /*
@@ -396,7 +394,7 @@ void TeorethicInformation::updateCellLimits(
     }
 }
 
-float TeorethicInformation::calculateLogs(float probability)
+double TeorethicInformation::calculateLogs(double probability)
 {
     /*
         To calculate the log-odds
@@ -404,13 +402,13 @@ float TeorethicInformation::calculateLogs(float probability)
     return log(probability / (1 - probability));
 }
 
-float TeorethicInformation::calculateMapMutualInformation()
+double TeorethicInformation::calculateMapMutualInformation()
 {
     /*
         To calculate map mutual information, this is the summation
         of all cells mutual information
     */
-    float sum = 0.0f;
+    double sum = 0.0f;
     for (int i = 0; i < m_num_cells; ++i)
     {
         for (int j = 0; j < m_num_cells; ++j)
@@ -421,47 +419,48 @@ float TeorethicInformation::calculateMapMutualInformation()
     return sum;
 }
 
-std::unordered_map<TeorethicInformation::map_tuple, float, TeorethicInformation::HashTuple> TeorethicInformation::computeProbabilities(std::vector<std::vector<float>>& meas_outcm)
+std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation::HashTuple> TeorethicInformation::computeMeasurementOutcomesHistogram(std::vector<std::vector<double>>& meas_outcm)
 {
     /*
         To compute all the possible combinations of a grid cell, given a set of measurement outcomes
     */
-    // Cleaning measurement outcomes map
-    std::unordered_map<map_tuple, float, HashTuple> map_out;
-    std::unordered_map<map_tuple, float, HashTuple>::iterator it_out;
+    std::unordered_map<map_tuple, double, HashTuple> temp_map;
+    std::unordered_map<map_tuple, double, HashTuple>::iterator it_temp;
 
     // The number of measurements
     int k = meas_outcm.size(); 
     int r = 1;
 
-    float p_free = meas_outcm[0][2];
-    float p_occ = meas_outcm[0][1];
-    float p_un = meas_outcm[0][0];
+    double p_free = meas_outcm[0][2];
+    double p_occ = meas_outcm[0][1];
+    double p_un = meas_outcm[0][0];
 
+    temp_map.clear();
+    
     // Root
-    map_out.insert(map_pair(std::make_tuple(0, 0, 0), 1.0f));
+    temp_map[std::make_tuple(0, 0, 0)] = 1.0f;
 
     // First measurement
-    map_out.insert(map_pair(std::make_tuple(1, 0, 0), p_free));
-    map_out.insert(map_pair(std::make_tuple(0, 1, 0), p_occ));
-    map_out.insert(map_pair(std::make_tuple(0, 0, 1), p_un));
+    temp_map[std::make_tuple(1, 0, 0)] = p_free;
+    temp_map[std::make_tuple(0, 1, 0)] = p_occ;
+    temp_map[std::make_tuple(0, 0, 1)] = p_un;
 
     for (int i = r; r < k; ++r)
     {
         std::vector<map_tuple> tup_vct;
-        std::vector<float> acc_prob;
+        std::vector<double> acc_prob;
 
-        for (it_out = map_out.begin(); it_out != map_out.end(); ++it_out)
+        for (it_temp = temp_map.begin(); it_temp != temp_map.end(); ++it_temp)
         {
             // Index
-            int fr_idx = std::get<0>(it_out->first);
-            int oc_idx = std::get<1>(it_out->first);
-            int un_idx = std::get<2>(it_out->first);
+            int fr_idx = std::get<0>(it_temp->first);
+            int oc_idx = std::get<1>(it_temp->first);
+            int un_idx = std::get<2>(it_temp->first);
 
             // Measurement outcome probability
-            float free_prop = meas_outcm[r][0];
-            float occ_prop = meas_outcm[r][1];
-            float un_prop = meas_outcm[r][2];
+            double free_prop = meas_outcm[r][0];
+            double occ_prop = meas_outcm[r][1];
+            double un_prop = meas_outcm[r][2];
 
             if (fr_idx + oc_idx + un_idx == r)
             {
@@ -472,12 +471,12 @@ std::unordered_map<TeorethicInformation::map_tuple, float, TeorethicInformation:
                 // Free
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_out->second * free_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * free_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(fr_idx + 1, oc_idx, un_idx));
-                    acc_prob.push_back(it_out->second * free_prop);
+                    acc_prob.push_back(it_temp->second * free_prop);
                 }
 
                 it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx + 1, un_idx));
@@ -485,12 +484,12 @@ std::unordered_map<TeorethicInformation::map_tuple, float, TeorethicInformation:
                 // Occupied
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_out->second * occ_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * occ_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(fr_idx, oc_idx + 1, un_idx));
-                    acc_prob.push_back(it_out->second * occ_prop);
+                    acc_prob.push_back(it_temp->second * occ_prop);
                 }
 
                 it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx, un_idx + 1));
@@ -498,31 +497,43 @@ std::unordered_map<TeorethicInformation::map_tuple, float, TeorethicInformation:
                 // Unobserved
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_out->second * un_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * un_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(fr_idx, oc_idx, un_idx + 1));
-                    acc_prob.push_back(it_out->second * un_prop);
+                    acc_prob.push_back(it_temp->second * un_prop);
                 }
             }
         }
         // Inserting the elements into the map
         for (int k = 0; k < tup_vct.size(); ++k)
         {
-            map_out.insert(map_pair(tup_vct[k], acc_prob[k]));
+            temp_map[tup_vct[k]] = acc_prob[k];
         }
     }
-    return map_out;
+
+    // Leaving in the map only the final outcomes
+    std::unordered_map<map_tuple, double, HashTuple> out_map;
+    std::unordered_map<map_tuple, double, HashTuple>::iterator it_out;
+    for (it_out = temp_map.begin(); it_out != temp_map.end(); ++it_out)
+    {
+        if (std::get<0>(it_out->first) + std::get<1>(it_out->first) + std::get<2>(it_out->first) == k)
+        {
+            out_map[it_out->first] = it_out->second;
+        }
+    }
+
+    return out_map;
 }
 
-float TeorethicInformation::euclideanDistance(float x_1, float y_1, float x_2, float y_2)
+double TeorethicInformation::euclideanDistance(double x_1, double y_1, double x_2, double y_2)
 {
     /*
         To calculate the euclidean distance between two points
     */
-    float diff_x = x_2 - x_1;
-    float diff_y = y_2 - y_1;
+    double diff_x = x_2 - x_1;
+    double diff_y = y_2 - y_1;
 
     return sqrt(diff_x*diff_x + diff_y*diff_y);
 }
@@ -539,7 +550,7 @@ int TeorethicInformation::getSign(int n_1, int n_2)
     else { return 1; }
 }
 
-std::vector<int> TeorethicInformation::getGridPosition(float x, float y)
+std::vector<int> TeorethicInformation::getGridPosition(double x, double y)
 {
     /*
         To maps the current position into grid coordinates
@@ -550,14 +561,14 @@ std::vector<int> TeorethicInformation::getGridPosition(float x, float y)
     return {x_cell, y_cell};
 }
 
-std::vector<float> TeorethicInformation::laserHitDistance(std::vector<float> const& robot_pose, float range, float angle)
+std::vector<double> TeorethicInformation::laserHitDistance(std::vector<double> const& robot_pose, double range, double angle)
 {
     /*
         To get the distance where the laser beam hits something
             - Applying RBT from the global to the sensor frame
     */
-    float x_tf = (range * cos(robot_pose[2] + angle)) + robot_pose[0];
-    float y_tf = (range * sin(robot_pose[2] + angle)) + robot_pose[1];
+    double x_tf = (range * cos(robot_pose[2] + angle)) + robot_pose[0];
+    double y_tf = (range * sin(robot_pose[2] + angle)) + robot_pose[1];
 
     return {x_tf, y_tf};
 }
@@ -582,7 +593,7 @@ void TeorethicInformation::initializeGrids()
     }
 }
 
-float TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_outcome)
+double TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_outcome)
 {
     /*
         To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
@@ -590,13 +601,13 @@ float TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_outc
             - Calculate the probability from those logs
             - Calculate the entropy with the retrieved probability
     */
-    float entropy = std::get<0>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) + 
+    double entropy = std::get<0>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) + 
                     std::get<1>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) + 
                     std::get<2>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)));
     return entropy;
 }
 
-float TeorethicInformation::probabilityFromLogs(float log)
+double TeorethicInformation::probabilityFromLogs(double log)
 {
     /*
         To transform the Log-odds into probability
@@ -604,14 +615,14 @@ float TeorethicInformation::probabilityFromLogs(float log)
     return (exp(log) / (1 + exp(log)));
 }
 
-float TeorethicInformation::probabilityFromObservation(float range_1, float range_2)
+double TeorethicInformation::probabilityFromObservation(double range_1, double range_2)
 {
     /*
         To calculate the probability of a cell being observed by a given measurement
     */
-    float max_range = 5.0f;
-    float lambda = 0.35f;
-    float nu = 0.28f;
+    double max_range = 5.0f;
+    double lambda = 0.35f;
+    double nu = 0.28f;
 
     range_1 = (range_1 > max_range) ? max_range : range_1;
     range_2 = (range_2 > max_range) ? max_range : range_2;
@@ -619,13 +630,13 @@ float TeorethicInformation::probabilityFromObservation(float range_1, float rang
     return nu * (exp(-lambda*range_1) - exp(-lambda*range_2));
 }
 
-std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcomes(std::vector<int> cell)
+std::vector<std::vector<double>> TeorethicInformation::retreiveMeasurementOutcomes(std::vector<int> cell)
 {
     /*
         To get all the measurement outcomes for the current cell
     */
-    std::vector<std::vector<float>> meas_outcomes;
-    std::map<std::vector<int>, std::vector<std::vector<float>>>::iterator it_cells;
+    std::vector<std::vector<double>> meas_outcomes;
+    std::map<std::vector<int>, std::vector<std::vector<double>>>::iterator it_cells;
     it_cells = m_cell_probabilities.find({cell[0], cell[1]});
 
     if (it_cells != m_cell_probabilities.end())
@@ -641,7 +652,7 @@ std::vector<std::vector<float>> TeorethicInformation::retreiveMeasurementOutcome
 }
 
 
-void TeorethicInformation::updateCellMutualInformation(float mut_inf, std::vector<int> cell)
+void TeorethicInformation::updateCellMutualInformation(double mut_inf, std::vector<int> cell)
 {
     /*
         To update the mutual information for each individual cell

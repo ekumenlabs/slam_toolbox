@@ -31,8 +31,6 @@ namespace slam_toolbox
 
 class LifelongSlamToolbox : public SlamToolbox
 {
-  typedef std::tuple<int, int, int> map_tuple;
-  typedef std::pair<map_tuple, float> map_pair;
 
 public:
   explicit LifelongSlamToolbox(rclcpp::NodeOptions options);
