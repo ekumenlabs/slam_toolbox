@@ -24,7 +24,7 @@
 #include <math.h>
 #include <tuple>
 #include "slam_toolbox/slam_toolbox_common.hpp"
-#include "slam_toolbox/experimental/theoretic_information.hpp"
+#include "slam_toolbox/experimental/information_estimates.hpp"
 
 namespace slam_toolbox
 {

@@ -76,7 +76,7 @@ LifelongSlamToolbox::LifelongSlamToolbox(rclcpp::NodeOptions options)
 
   // in lifelong mode, we cannot have interactive mode enabled
   enable_interactive_mode_ = false;
-  TeorethicInformation information;
+  InformationEstimates information;
 }
 
 /*****************************************************************************/

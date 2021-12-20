@@ -162,7 +162,7 @@ target_link_libraries(localization_slam_toolbox_node localization_slam_toolbox)
 
 add_library(lifelong_slam_toolbox src/experimental/slam_toolbox_lifelong.cpp)
 target_link_libraries(lifelong_slam_toolbox toolbox_common kartoSlamToolbox ${Boost_LIBRARIES})
-add_executable(lifelong_slam_toolbox_node src/experimental/slam_toolbox_lifelong_node.cpp src/experimental/theoretic_information.cpp)
+add_executable(lifelong_slam_toolbox_node src/experimental/slam_toolbox_lifelong_node.cpp src/experimental/information_estimates.cpp)
 target_link_libraries(lifelong_slam_toolbox_node lifelong_slam_toolbox)
 
 #### Merging maps tool
