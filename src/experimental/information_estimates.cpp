@@ -1,12 +1,14 @@
 #include <iostream>
-#include "slam_toolbox/experimental/theoretic_information.hpp"
+#include "slam_toolbox/experimental/information_estimates.hpp"
 
-TeorethicInformation::TeorethicInformation()
+InformationEstimates::InformationEstimates()
 {
-    std::cout << "Constructor of Theoretic information" << std::endl;
-    m_resolution = 0.5f; // Map resolution
+    /*
+        Need to add the new elements for the constructor
+    */
+    m_cell_resol = 0.5f; // Map resolution
     m_map_dist = 20.0f; // Total map distance
-    m_num_cells = static_cast<int>(m_map_dist / m_resolution);
+    m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
 
     // Grids initialization (Occupancy and Mutual information)
     m_grid.resize(m_num_cells);
@@ -17,7 +19,7 @@ TeorethicInformation::TeorethicInformation()
     scannerTest();
 }
 
-void TeorethicInformation::scannerTest()
+void InformationEstimates::scannerTest()
 {
     /*
         La lectura de menor ganancia
@@ -53,24 +55,16 @@ void TeorethicInformation::scannerTest()
             std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
 
             // Laser continuous distance
-            std::vector<double> laser_grid = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
+            std::vector<double> laser_end = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
 
             // Laser final cell
-            std::vector<int> final_grid_pos = getGridPosition(laser_grid[0], laser_grid[1]);
+            std::vector<int> final_grid_pos = getGridPosition(laser_end[0], laser_end[1]);
 
             // Ray tracing for getting the visited cells
             std::vector<int> cells_x, cells_y;
-            std::pair<std::vector<int>, std::vector<int>> res_pair = Bresenham(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
+            std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
             cells_x = res_pair.first;
             cells_y = res_pair.second;
-
-            // Deleting the current robot cell
-            cells_x.erase(cells_x.begin());
-            cells_y.erase(cells_y.begin()); 
-            
-            // Adding last hit cell to the set
-            cells_x.push_back(final_grid_pos[0]);
-            cells_y.push_back(final_grid_pos[1]);
 
             // Visiting the cells
             for (int j = 0; j < cells_x.size(); ++j)
@@ -79,57 +73,20 @@ void TeorethicInformation::scannerTest()
                 std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
 
                 // Inidividual cell limits
-                double limit_x = cells_x[j] * m_resolution;
-                double limit_y = cells_y[j] * m_resolution;
+                double limit_x = cells_x[j] * m_cell_resol;
+                double limit_y = cells_y[j] * m_cell_resol;
 
-                // Cell limits: min_x, max_x, min_y, max_y
-                std::vector<double> cell_limits {limit_x, limit_x + m_resolution, limit_y, limit_y + m_resolution};
+                std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_poses[r], laser_end, robot_grid_pos, final_grid_pos, limit_x, limit_y);
 
-                // Initial points for each of the 4 corners
-                std::vector<double> initial_x {limit_x, limit_x, limit_x + m_resolution, limit_x + m_resolution};
-                std::vector<double> initial_y {limit_y, limit_y, limit_y + m_resolution, limit_y + m_resolution};
-                
-                // Final points for each of the 4 corners
-                std::vector<double> final_x {limit_x + m_resolution, limit_x, limit_x + m_resolution, limit_x};
-                std::vector<double> final_y {limit_y, limit_y + m_resolution, limit_y, limit_y + m_resolution};
-
-                // Set the new cell limits
-
-                // Need to take care of this function
-                updateCellLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, cell_limits, robot_grid_pos, final_grid_pos);
-
-                std::vector<double> inter_x, inter_y;
-
-                for (int k = 0; k < 4; ++k)
-                {
-                    std::vector<double> intersection = calculateCellIntersectionPoints(robot_poses[r], laser_grid, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
-                    if(intersection.size() != 0)
-                    {
-                        if ((fabs(intersection[0]) >= (fabs(cell_limits[0]) - 0.001)) &&
-                        (fabs(intersection[0]) <= (fabs(cell_limits[1]) + 0.001)) &&
-                        (fabs(intersection[1]) >= (fabs(cell_limits[2]) - 0.001)) &&
-                        (fabs(intersection[1]) <= (fabs(cell_limits[3]) + 0.001)))
-                        {
-                            /*
-                                Two points where the beam cuts the cell
-                                - A laser beam can cut the cell at least 1 time (Enter)
-                                - A laser beam can cut the cell at most 2 times (Enter an exit)
-                            */
-                            inter_x.push_back(intersection[0]);
-                            inter_y.push_back(intersection[1]);
-                        }
-                    }
-                }
-                // When a cell is marked by Bresenham but there is not intersection points
-                if (inter_x.size() == 0)
+                if (intersections.first.size() == 0)
                     continue;
 
                 // Enter (d1) and Exit (d2) distances
                 std::vector<double> distances;
-                for (int k = 0; k < inter_x.size(); ++k)
+                for (int k = 0; k < intersections.first.size(); ++k)
                 {
                     // From robot position to intersection points
-                    double dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], inter_x[k], inter_y[k]);
+                    double dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], intersections.first[k], intersections.second[k]);
                     distances.push_back(dist_point);
                 }
 
@@ -139,27 +96,24 @@ void TeorethicInformation::scannerTest()
                 // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
 
                 // Measurement outcomes vector {Pfree, Pocc, Pun}
+                // Map of tuples
                 std::vector<double> probabilities {
-                    probabilityFromObservation(distances[1], 5.0f),
-                    probabilityFromObservation(distances[0], distances[1]),
-                    probabilityFromObservation(0.0f, distances[0])
+                    calculateScanMassProbabilityBetween(distances[1], 5.0f),
+                    calculateScanMassProbabilityBetween(distances[0], distances[1]),
+                    calculateScanMassProbabilityBetween(0.0f, distances[0])
                 };
 
                 // Appending new measurement outcomes for the current cell
                 appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
 
                 // Get all the measurement outcomes for the current cell
-                std::vector<std::vector<double>> meas_outcomes = retreiveMeasurementOutcomes({cells_x[j], cells_y[j]});
+                std::vector<std::vector<double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
 
                 // Compute all the possible combinations for the current cell - algorithm 1
-                std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(meas_outcomes);
-                
-                // Calculate 3.12
-                std::unordered_map<map_tuple, double, HashTuple>::iterator it_mutual;
-
-                // std::cout << "Number of measurements: " << meas_outcomes.size() << std::endl;
+                std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
                 
                 double cell_mutual_inf = 0.0f;
+                std::unordered_map<map_tuple, double, HashTuple>::iterator it_mutual;
                 for (it_mutual = meas_out_prob.begin(); it_mutual != meas_out_prob.end(); ++it_mutual)
                 {
                     cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
@@ -175,7 +129,7 @@ void TeorethicInformation::scannerTest()
     }
 }
 
-void TeorethicInformation::clearVisitedCells()
+void InformationEstimates::clearVisitedCells()
 {
     /*
         To clear the visited cell
@@ -191,7 +145,7 @@ void TeorethicInformation::clearVisitedCells()
     }
 }
 
-void TeorethicInformation::appendCellProbabilities(std::vector<double>& measurements, std::vector<int> cell)
+void InformationEstimates::appendCellProbabilities(std::vector<double>& measurements, std::vector<int> cell)
 {
     /*
         To append a new measurement for a specific cell
@@ -238,10 +192,11 @@ void TeorethicInformation::appendCellProbabilities(std::vector<double>& measurem
     }
 }
 
-std::pair<std::vector<int>, std::vector<int>> TeorethicInformation::Bresenham(int x_1, int y_1, int x_2, int y_2)
+std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(int x_1, int y_1, int x_2, int y_2)
 {
     /*
         To find the set of cells hit by a laser beam
+        This is based on Bresenham algorithm
     */
     std::vector<int> x_bres;
     std::vector<int> y_bres;
@@ -252,8 +207,8 @@ std::pair<std::vector<int>, std::vector<int>> TeorethicInformation::Bresenham(in
     int delta_x = abs(x_2 - x_1);
     int delta_y = abs(y_2 - y_1);
 
-    int s_x = getSign(x_1, x_2);
-    int s_y = getSign(y_1, y_2);
+    int s_x = signum(x_2 - x_1);
+    int s_y = signum(y_2 - y_1);
     bool interchange = false;
 
     if (delta_y > delta_x)
@@ -298,20 +253,27 @@ std::pair<std::vector<int>, std::vector<int>> TeorethicInformation::Bresenham(in
         x_bres.push_back(x);
         y_bres.push_back(y);
     }
+    // Delete the current robot cell
+    x_bres.erase(x_bres.begin());
+    y_bres.erase(y_bres.begin()); 
+            
+    // Adding last hit cell to the set
+    x_bres.push_back(x_2);
+    y_bres.push_back(y_2);
     return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
 }
 
-double TeorethicInformation::calculateEntropy(double probability)
+double InformationEstimates::calculateInformationContent(double prob)
 {
     /*
-        To calculate the entropy
+        To calculate the information content or self-information
+        based on the proability of being occupied
     */
-    return probability * log2(probability);
+    return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
 }
 
-
-std::vector<double> TeorethicInformation::calculateCellIntersectionPoints(
-    std::vector<double> & laser_start, std::vector<double> & laser_end,
+std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
+    std::vector<double> const& laser_start, std::vector<double> const& laser_end,
     std::vector<double> cell_start, std::vector<double> cell_end)
 {
     /*
@@ -344,9 +306,53 @@ std::vector<double> TeorethicInformation::calculateCellIntersectionPoints(
     }
 }
 
-void TeorethicInformation::updateCellLimits(
-    std::vector<double> & initial_x, std::vector<double> & initial_y, std::vector<double> & final_x, std::vector<double> & final_y,
-    double & limit_x, double & limit_y, std::vector<double> & cell_limits, std::vector<int> & robot_grid_pos, std::vector<int> & final_grid_pos)
+std::pair<std::vector<double>, std::vector<double>> InformationEstimates::computeLineBoxIntersection(
+    std::vector<double> const& laser_start, std::vector<double> const& laser_end, 
+    std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos,
+    double limit_x, double limit_y)
+{
+    // Cell limits: min_x, max_x, min_y, max_y
+    std::vector<double> cell_limits {limit_x, limit_x + m_cell_resol, limit_y, limit_y + m_cell_resol};
+
+    // Initial points for each of the 4 corners
+    std::vector<double> initial_x {limit_x, limit_x, limit_x + m_cell_resol, limit_x + m_cell_resol};
+    std::vector<double> initial_y {limit_y, limit_y, limit_y + m_cell_resol, limit_y + m_cell_resol};
+    
+    // Final points for each of the 4 corners
+    std::vector<double> final_x {limit_x + m_cell_resol, limit_x, limit_x + m_cell_resol, limit_x};
+    std::vector<double> final_y {limit_y, limit_y + m_cell_resol, limit_y, limit_y + m_cell_resol};
+
+    // Set the new cell limits
+    updateCellLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, cell_limits, robot_grid_pos, final_grid_pos);
+
+    std::vector<double> inter_x, inter_y;
+
+    for (int k = 0; k < 4; ++k)
+    {
+        std::vector<double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
+        if(intersection.size() != 0)
+        {
+            if ((fabs(intersection[0]) >= (fabs(cell_limits[0]) - 0.001)) &&
+            (fabs(intersection[0]) <= (fabs(cell_limits[1]) + 0.001)) &&
+            (fabs(intersection[1]) >= (fabs(cell_limits[2]) - 0.001)) &&
+            (fabs(intersection[1]) <= (fabs(cell_limits[3]) + 0.001)))
+            {
+                /*
+                    Two points where the beam cuts the cell
+                    - A laser beam can cut the cell at least 1 time (Enter)
+                    - A laser beam can cut the cell at most 2 times (Enter an exit)
+                */
+                inter_x.push_back(intersection[0]);
+                inter_y.push_back(intersection[1]);
+            }
+        }
+    }
+    return std::pair<std::vector<double>, std::vector<double>>{inter_x, inter_y}; 
+}
+
+void InformationEstimates::updateCellLimits(
+    std::vector<double>& initial_x, std::vector<double>& initial_y, std::vector<double>& final_x, std::vector<double>& final_y,
+    double limit_x, double limit_y, std::vector<double>& cell_limits, std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos)
 {
     /*
         To calculate grid grid limits for intersection
@@ -354,55 +360,56 @@ void TeorethicInformation::updateCellLimits(
     if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
     {
         // X greater and Y greater. WRO final points
-        final_x[0] = limit_x + m_resolution;
-        final_x[2] = limit_x + m_resolution;
+        final_x[0] = limit_x + m_cell_resol;
+        final_x[2] = limit_x + m_cell_resol;
 
         cell_limits[2] = limit_y;
-        cell_limits[3] = limit_y + m_resolution;
+        cell_limits[3] = limit_y + m_cell_resol;
     }
 
     if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
     {
         // X greater and Y minor. WRO final points
-        initial_y[2] = limit_y - m_resolution;
-        initial_y[3] = limit_y - m_resolution;
+        initial_y[2] = limit_y - m_cell_resol;
+        initial_y[3] = limit_y - m_cell_resol;
 
-        final_y[1] = limit_y - m_resolution;
-        final_y[3] = limit_y - m_resolution;
+        final_y[1] = limit_y - m_cell_resol;
+        final_y[3] = limit_y - m_cell_resol;
 
-        cell_limits[2] = limit_y - m_resolution;
+        cell_limits[2] = limit_y - m_cell_resol;
         cell_limits[3] = limit_y;
     }
 
     if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
     {
         // X minor and Y minor. WRO final points
-        initial_x[2] = limit_x - m_resolution;
-        initial_x[3] = limit_x - m_resolution;
-        initial_y[2] = limit_y - m_resolution;
-        initial_y[3] = limit_y - m_resolution;
+        initial_x[2] = limit_x - m_cell_resol;
+        initial_x[3] = limit_x - m_cell_resol;
+        initial_y[2] = limit_y - m_cell_resol;
+        initial_y[3] = limit_y - m_cell_resol;
 
-        final_x[0] = limit_x - m_resolution;
-        final_x[2] = limit_x - m_resolution;
-        final_y[1] = limit_y - m_resolution;
-        final_y[3] = limit_y - m_resolution;
+        final_x[0] = limit_x - m_cell_resol;
+        final_x[2] = limit_x - m_cell_resol;
+        final_y[1] = limit_y - m_cell_resol;
+        final_y[3] = limit_y - m_cell_resol;
 
-        cell_limits[0] = limit_x - m_resolution;
+        cell_limits[0] = limit_x - m_cell_resol;
         cell_limits[1] = limit_x;
-        cell_limits[2] = limit_y - m_resolution;
+        cell_limits[2] = limit_y - m_cell_resol;
         cell_limits[3] = limit_y;
     }
 }
 
-double TeorethicInformation::calculateLogs(double probability)
+double InformationEstimates::calculateLogOddsFromProbability(double probability)
 {
     /*
         To calculate the log-odds
+        This should be a free function
     */
     return log(probability / (1 - probability));
 }
 
-double TeorethicInformation::calculateMapMutualInformation()
+double InformationEstimates::calculateMapMutualInformation()
 {
     /*
         To calculate map mutual information, this is the summation
@@ -419,7 +426,16 @@ double TeorethicInformation::calculateMapMutualInformation()
     return sum;
 }
 
-std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation::HashTuple> TeorethicInformation::computeMeasurementOutcomesHistogram(std::vector<std::vector<double>>& meas_outcm)
+double InformationEstimates::calculateProbabilityFromLogOdds(double log)
+{
+    /*
+        To transform the Log-odds into probability
+        This should be a free function
+    */
+    return (exp(log) / (1 + exp(log)));
+}
+
+std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<double>>& meas_outcm)
 {
     /*
         To compute all the possible combinations of a grid cell, given a set of measurement outcomes
@@ -445,28 +461,27 @@ std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation
     temp_map[std::make_tuple(0, 1, 0)] = p_occ;
     temp_map[std::make_tuple(0, 0, 1)] = p_un;
 
-    for (int i = r; r < k; ++r)
+    for (int r = 1; r < k; ++r)
     {
         std::vector<map_tuple> tup_vct;
         std::vector<double> acc_prob;
 
+        // Measurement outcome probability
+        double free_prop = meas_outcm[r][0];
+        double occ_prop = meas_outcm[r][1];
+        double un_prop = meas_outcm[r][2];
+
         for (it_temp = temp_map.begin(); it_temp != temp_map.end(); ++it_temp)
         {
             // Index
-            int fr_idx = std::get<0>(it_temp->first);
-            int oc_idx = std::get<1>(it_temp->first);
-            int un_idx = std::get<2>(it_temp->first);
-
-            // Measurement outcome probability
-            double free_prop = meas_outcm[r][0];
-            double occ_prop = meas_outcm[r][1];
-            double un_prop = meas_outcm[r][2];
-
-            if (fr_idx + oc_idx + un_idx == r)
+            int idx_free, idx_occ, idx_unk;
+            std::tie(idx_free, idx_occ, idx_unk) = it_temp->first;
+            
+            if (idx_free + idx_occ + idx_unk == r)
             {
                 // Searching for the current combination in this level
                 std::vector<map_tuple>::iterator it_comb;
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx + 1, oc_idx, un_idx));
+                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free + 1, idx_occ, idx_unk));
 
                 // Free
                 if (it_comb != tup_vct.end())
@@ -475,11 +490,11 @@ std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation
                 }
                 else
                 {
-                    tup_vct.push_back(std::make_tuple(fr_idx + 1, oc_idx, un_idx));
+                    tup_vct.push_back(std::make_tuple(idx_free + 1, idx_occ, idx_unk));
                     acc_prob.push_back(it_temp->second * free_prop);
                 }
 
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx + 1, un_idx));
+                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ + 1, idx_unk));
 
                 // Occupied
                 if (it_comb != tup_vct.end())
@@ -488,11 +503,11 @@ std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation
                 }
                 else
                 {
-                    tup_vct.push_back(std::make_tuple(fr_idx, oc_idx + 1, un_idx));
+                    tup_vct.push_back(std::make_tuple(idx_free, idx_occ + 1, idx_unk));
                     acc_prob.push_back(it_temp->second * occ_prop);
                 }
 
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(fr_idx, oc_idx, un_idx + 1));
+                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ, idx_unk + 1));
 
                 // Unobserved
                 if (it_comb != tup_vct.end())
@@ -501,7 +516,7 @@ std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation
                 }
                 else
                 {
-                    tup_vct.push_back(std::make_tuple(fr_idx, oc_idx, un_idx + 1));
+                    tup_vct.push_back(std::make_tuple(idx_free, idx_occ, idx_unk + 1));
                     acc_prob.push_back(it_temp->second * un_prop);
                 }
             }
@@ -523,11 +538,10 @@ std::unordered_map<TeorethicInformation::map_tuple, double, TeorethicInformation
             out_map[it_out->first] = it_out->second;
         }
     }
-
     return out_map;
 }
 
-double TeorethicInformation::euclideanDistance(double x_1, double y_1, double x_2, double y_2)
+double InformationEstimates::euclideanDistance(double x_1, double y_1, double x_2, double y_2)
 {
     /*
         To calculate the euclidean distance between two points
@@ -538,30 +552,28 @@ double TeorethicInformation::euclideanDistance(double x_1, double y_1, double x_
     return sqrt(diff_x*diff_x + diff_y*diff_y);
 }
 
-int TeorethicInformation::getSign(int n_1, int n_2)
+int InformationEstimates::signum(int num)
 {
     /*
-        To get the sign of an operation, used for Bresenham algorithm
+        To get the sign of an operation, used by Bresenham algorithm
     */
-    int difference = n_2 - n_1;
-
-    if (difference == 0) { return 0; }
-    else if (difference < 0) { return -1; }
-    else { return 1; }
+    if (num < 0) return -1; 
+    if (num >= 1) return 1;
+    return 0;
 }
 
-std::vector<int> TeorethicInformation::getGridPosition(double x, double y)
+std::vector<int> InformationEstimates::getGridPosition(double x, double y)
 {
     /*
         To maps the current position into grid coordinates
     */
-    int x_cell = floor((1 / m_resolution) * x);
-    int y_cell = floor((1 / m_resolution) * y);
+    int x_cell = floor((x / m_cell_resol));
+    int y_cell = floor((y / m_cell_resol));
 
     return {x_cell, y_cell};
 }
 
-std::vector<double> TeorethicInformation::laserHitDistance(std::vector<double> const& robot_pose, double range, double angle)
+std::vector<double> InformationEstimates::laserHitDistance(std::vector<double> const& robot_pose, double range, double angle)
 {
     /*
         To get the distance where the laser beam hits something
@@ -573,7 +585,7 @@ std::vector<double> TeorethicInformation::laserHitDistance(std::vector<double> c
     return {x_tf, y_tf};
 }
 
-void TeorethicInformation::initializeGrids()
+void InformationEstimates::initializeGrids()
 {
     /*
         To create the grid
@@ -593,7 +605,7 @@ void TeorethicInformation::initializeGrids()
     }
 }
 
-double TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_outcome)
+double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_outcome)
 {
     /*
         To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
@@ -601,62 +613,67 @@ double TeorethicInformation::measurementOutcomeEntropy(map_tuple const& meas_out
             - Calculate the probability from those logs
             - Calculate the entropy with the retrieved probability
     */
-    double entropy = std::get<0>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.3f))) + 
-                    std::get<1>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.7f))) + 
-                    std::get<2>(meas_outcome) * calculateEntropy(probabilityFromLogs(calculateLogs(0.5f)));
-    return entropy;
+    int num_free, num_occ, num_unk; 
+    std::tie(num_free, num_occ, num_unk) = meas_outcome;
+    
+    double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
+    double prob_occ = calculateProbabilityFromLogOdds(log_occ);
+    return calculateInformationContent(prob_occ);
 }
 
-double TeorethicInformation::probabilityFromLogs(double log)
+double InformationEstimates::calculateScanMassProbabilityBetween(double range_1, double range_2)
 {
     /*
-        To transform the Log-odds into probability
+        To calculate the mass probability of a cell being observed by a given measurement
     */
-    return (exp(log) / (1 + exp(log)));
+
+    range_1 = (range_1 > m_max_sensor_range) ? m_max_sensor_range : range_1;
+    range_2 = (range_2 > m_max_sensor_range) ? m_max_sensor_range : range_2;
+
+    return m_obs_nu * (exp(-m_obs_lambda*range_1) - exp(-m_obs_lambda*range_2));
 }
 
-double TeorethicInformation::probabilityFromObservation(double range_1, double range_2)
+std::vector<std::vector<double>> InformationEstimates::retreiveCellProbabilities(std::vector<int> cell)
 {
     /*
-        To calculate the probability of a cell being observed by a given measurement
+        To get all the cell probabilities
     */
-    double max_range = 5.0f;
-    double lambda = 0.35f;
-    double nu = 0.28f;
-
-    range_1 = (range_1 > max_range) ? max_range : range_1;
-    range_2 = (range_2 > max_range) ? max_range : range_2;
-
-    return nu * (exp(-lambda*range_1) - exp(-lambda*range_2));
-}
-
-std::vector<std::vector<double>> TeorethicInformation::retreiveMeasurementOutcomes(std::vector<int> cell)
-{
-    /*
-        To get all the measurement outcomes for the current cell
-    */
-    std::vector<std::vector<double>> meas_outcomes;
     std::map<std::vector<int>, std::vector<std::vector<double>>>::iterator it_cells;
     it_cells = m_cell_probabilities.find({cell[0], cell[1]});
 
-    if (it_cells != m_cell_probabilities.end())
-    {
-        // Exploring the measurement outcomes for the specific cell
-        for (int i = 0; i < it_cells->second.size(); ++i)
-        {
-            // Append the measurement outcomes for the current cell
-            meas_outcomes.push_back({it_cells->second[i][0], it_cells->second[i][1], it_cells->second[i][2]});
-        }
-    }
-    return meas_outcomes;
+    return it_cells->second; 
 }
 
-
-void TeorethicInformation::updateCellMutualInformation(double mut_inf, std::vector<int> cell)
+void InformationEstimates::updateCellMutualInformation(double mut_inf, std::vector<int> cell)
 {
     /*
         To update the mutual information for each individual cell
         This is the result of the summation of 3.12
     */
     m_mutual_grid[cell[0]][cell[1]] = mut_inf;
+}
+
+void InformationEstimates::setMaxSensorRange(double const sensor_range)
+{
+    m_max_sensor_range = sensor_range;
+}
+
+void InformationEstimates::setObservationLambda(double const lambda)
+{
+    m_obs_lambda = lambda;
+}
+
+void InformationEstimates::setObservationNu(double const nu)
+{
+    m_obs_nu = nu;
+}
+
+void InformationEstimates::setCellResolution(double const resolution)
+{
+    m_cell_resol = resolution;
+}
+
+void InformationEstimates::setMapDistance(double const distance)
+{
+    m_map_dist = distance;
 }
