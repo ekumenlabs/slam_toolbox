@@ -113,10 +113,9 @@ void InformationEstimates::scannerTest()
                 std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
                 
                 double cell_mutual_inf = 0.0f;
-                std::unordered_map<map_tuple, double, HashTuple>::iterator it_mutual;
-                for (it_mutual = meas_out_prob.begin(); it_mutual != meas_out_prob.end(); ++it_mutual)
+                for (auto& pair : meas_out_prob)
                 {
-                    cell_mutual_inf +=  it_mutual->second * measurementOutcomeEntropy(it_mutual->first);
+                    cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
                 }
 
                 // Mutual information of cell x, y given a set of measurements                
@@ -441,15 +440,14 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
         To compute all the possible combinations of a grid cell, given a set of measurement outcomes
     */
     std::unordered_map<map_tuple, double, HashTuple> temp_map;
-    std::unordered_map<map_tuple, double, HashTuple>::iterator it_temp;
 
     // The number of measurements
     int k = meas_outcm.size(); 
     int r = 1;
 
-    double p_free = meas_outcm[0][2];
+    double p_free = meas_outcm[0][0];
     double p_occ = meas_outcm[0][1];
-    double p_un = meas_outcm[0][0];
+    double p_un = meas_outcm[0][2];
 
     temp_map.clear();
     
@@ -471,11 +469,11 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
         double occ_prop = meas_outcm[r][1];
         double un_prop = meas_outcm[r][2];
 
-        for (it_temp = temp_map.begin(); it_temp != temp_map.end(); ++it_temp)
+        for (auto& pair : temp_map)        
         {
             // Index
             int idx_free, idx_occ, idx_unk;
-            std::tie(idx_free, idx_occ, idx_unk) = it_temp->first;
+            std::tie(idx_free, idx_occ, idx_unk) = pair.first;
             
             if (idx_free + idx_occ + idx_unk == r)
             {
@@ -486,12 +484,12 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
                 // Free
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * free_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += pair.second * free_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(idx_free + 1, idx_occ, idx_unk));
-                    acc_prob.push_back(it_temp->second * free_prop);
+                    acc_prob.push_back(pair.second * free_prop);
                 }
 
                 it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ + 1, idx_unk));
@@ -499,12 +497,12 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
                 // Occupied
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * occ_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += pair.second * occ_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(idx_free, idx_occ + 1, idx_unk));
-                    acc_prob.push_back(it_temp->second * occ_prop);
+                    acc_prob.push_back(pair.second * occ_prop);
                 }
 
                 it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ, idx_unk + 1));
@@ -512,12 +510,12 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
                 // Unobserved
                 if (it_comb != tup_vct.end())
                 {
-                    acc_prob[it_comb - tup_vct.begin()] += it_temp->second * un_prop;
+                    acc_prob[it_comb - tup_vct.begin()] += pair.second * un_prop;
                 }
                 else
                 {
                     tup_vct.push_back(std::make_tuple(idx_free, idx_occ, idx_unk + 1));
-                    acc_prob.push_back(it_temp->second * un_prop);
+                    acc_prob.push_back(pair.second * un_prop);
                 }
             }
         }
@@ -530,12 +528,11 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
 
     // Leaving in the map only the final outcomes
     std::unordered_map<map_tuple, double, HashTuple> out_map;
-    std::unordered_map<map_tuple, double, HashTuple>::iterator it_out;
-    for (it_out = temp_map.begin(); it_out != temp_map.end(); ++it_out)
+    for (auto& pair : temp_map)
     {
-        if (std::get<0>(it_out->first) + std::get<1>(it_out->first) + std::get<2>(it_out->first) == k)
+        if (std::get<0>(pair.first) + std::get<1>(pair.first) + std::get<2>(pair.first) == k)
         {
-            out_map[it_out->first] = it_out->second;
+            out_map[pair.first] = pair.second;
         }
     }
     return out_map;

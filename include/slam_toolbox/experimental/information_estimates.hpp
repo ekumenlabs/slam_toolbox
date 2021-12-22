@@ -8,6 +8,7 @@
 #include <cmath>
 #include <map>
 #include <unordered_map>
+#include "lib/karto_sdk/include/karto_sdk/Karto.h"
 
 class InformationEstimates
 {
@@ -107,6 +108,11 @@ private:
     void setObservationNu(double const nu);
     void setCellResolution(double const resolution);
     void setMapDistance(double const distance);
+
+    karto::Vector2<kt_double> point;
+    // This pose will save actual robot poses
+    karto::Pose2 pose;
+
 };
 
 #endif
