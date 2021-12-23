@@ -17,23 +17,18 @@ InformationEstimates::InformationEstimates()
     initializeGrids();
 
     scannerTest();
+
+
+    poses.push_back(karto::Pose2{1.78512, 2.1213 , M_PI});
+
+    karto::Pose2 pose = poses[0];
+    std::cout << pose.GetX() << std::endl;
+    std::cout << pose.GetY() << std::endl;
+    std::cout << pose.GetHeading() << std::endl;
 }
 
 void InformationEstimates::scannerTest()
 {
-    /*
-        La lectura de menor ganancia
-
-        Dado uno computamos el score - Esta informacion esta en el toolbox
-        Buscar scans en el mismo rango de vision
-
-        // Set -> information
-        // Nodo -> Que tanta ganancia aporta (Ganancia de informacion)
-        Batch elimination (Hiteresis) - Groups
-
-        Lista de adyacencia
-    */
-
     // Loop through the different robot poses
     for (int r = 0; r < robot_poses.size(); ++r)
     {
@@ -42,27 +37,43 @@ void InformationEstimates::scannerTest()
         // Angles {-50, -25, 0, 25, 50} in degrees
         std::vector<double> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
 
-        // Initial point
-        std::vector<int> robot_grid_pos = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
-        std::cout << "Robot position: " << robot_grid_pos[0] << ", " << robot_grid_pos[1] << std::endl;
+        karto::Vector2<int> robot_grid_pos_1 = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
 
         // Set as false the current boolean map
         clearVisitedCells();
+
+        /*
+        * Laser callback message
+        sensor_msgs::msg::LaserScan::ConstSharedPtr scan
+
+        * Double checking that current laser can be used
+        LaserRangeFinder * laser = getLaser(scan);
+        
+        * Localized range scan when the laser object, the laser scan and the pose are given 
+        LocalizedRangeScan * range_scan = addScan(laser, scan, pose);
+
+        * Point readings 
+        const PointVectorDouble & pts = candidate_scan->GetPointReadings(true);
+        PointVectorDouble::const_iterator pt_it;
+        */
 
         for (int i = 0; i < laser_ranges[r].size(); ++i)
         {
             std::cout << "................ New laser ................" << std::endl;
             std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
 
-            // Laser continuous distance
+            // This is the transformation - Should use Transform from Karto
+
+            // Laser continuous distance -- This function will potentnally not be used
             std::vector<double> laser_end = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
 
             // Laser final cell
-            std::vector<int> final_grid_pos = getGridPosition(laser_end[0], laser_end[1]);
+            karto::Vector2<int> final_grid_pos_1 = getGridPosition(laser_end[0], laser_end[1]);
 
             // Ray tracing for getting the visited cells
             std::vector<int> cells_x, cells_y;
-            std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos[0], robot_grid_pos[1], final_grid_pos[0], final_grid_pos[1]);
+            // I can change the returnign type as well
+            std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos_1, final_grid_pos_1);
             cells_x = res_pair.first;
             cells_y = res_pair.second;
 
@@ -76,7 +87,7 @@ void InformationEstimates::scannerTest()
                 double limit_x = cells_x[j] * m_cell_resol;
                 double limit_y = cells_y[j] * m_cell_resol;
 
-                std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_poses[r], laser_end, robot_grid_pos, final_grid_pos, limit_x, limit_y);
+                std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_poses[r], laser_end, robot_grid_pos_1, final_grid_pos_1, limit_x, limit_y);
 
                 if (intersections.first.size() == 0)
                     continue;
@@ -191,7 +202,7 @@ void InformationEstimates::appendCellProbabilities(std::vector<double>& measurem
     }
 }
 
-std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(int x_1, int y_1, int x_2, int y_2)
+std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt)
 {
     /*
         To find the set of cells hit by a laser beam
@@ -200,14 +211,14 @@ std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(i
     std::vector<int> x_bres;
     std::vector<int> y_bres;
 
-    int x = x_1;
-    int y = y_1;
+    int x = initial_pt.GetX();
+    int y = initial_pt.GetY();
 
-    int delta_x = abs(x_2 - x_1);
-    int delta_y = abs(y_2 - y_1);
+    int delta_x = abs(final_pt.GetX() - initial_pt.GetX());
+    int delta_y = abs(final_pt.GetY() - initial_pt.GetY());
 
-    int s_x = signum(x_2 - x_1);
-    int s_y = signum(y_2 - y_1);
+    int s_x = signum(final_pt.GetX() - initial_pt.GetX());
+    int s_y = signum(final_pt.GetY() - initial_pt.GetY());
     bool interchange = false;
 
     if (delta_y > delta_x)
@@ -257,8 +268,9 @@ std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(i
     y_bres.erase(y_bres.begin()); 
             
     // Adding last hit cell to the set
-    x_bres.push_back(x_2);
-    y_bres.push_back(y_2);
+    x_bres.push_back(final_pt.GetX());
+    y_bres.push_back(final_pt.GetY());
+
     return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
 }
 
@@ -307,7 +319,7 @@ std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
 
 std::pair<std::vector<double>, std::vector<double>> InformationEstimates::computeLineBoxIntersection(
     std::vector<double> const& laser_start, std::vector<double> const& laser_end, 
-    std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos,
+    karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
     double limit_x, double limit_y)
 {
     // Cell limits: min_x, max_x, min_y, max_y
@@ -349,14 +361,18 @@ std::pair<std::vector<double>, std::vector<double>> InformationEstimates::comput
     return std::pair<std::vector<double>, std::vector<double>>{inter_x, inter_y}; 
 }
 
+// void InformationEstimates::updateCellLimits(
+//     std::vector<double>& initial_x, std::vector<double>& initial_y, std::vector<double>& final_x, std::vector<double>& final_y,
+//     double limit_x, double limit_y, std::vector<double>& cell_limits, std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos)
+// {
 void InformationEstimates::updateCellLimits(
     std::vector<double>& initial_x, std::vector<double>& initial_y, std::vector<double>& final_x, std::vector<double>& final_y,
-    double limit_x, double limit_y, std::vector<double>& cell_limits, std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos)
+    double limit_x, double limit_y, std::vector<double>& cell_limits, karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos)
 {
     /*
         To calculate grid grid limits for intersection
     */
-    if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] >= robot_grid_pos[1])
+    if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() >= robot_grid_pos.GetY())
     {
         // X greater and Y greater. WRO final points
         final_x[0] = limit_x + m_cell_resol;
@@ -366,7 +382,7 @@ void InformationEstimates::updateCellLimits(
         cell_limits[3] = limit_y + m_cell_resol;
     }
 
-    if (final_grid_pos[0] >= robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+    if (final_grid_pos.GetX() >= robot_grid_pos.GetX() && final_grid_pos.GetY() < robot_grid_pos.GetY())
     {
         // X greater and Y minor. WRO final points
         initial_y[2] = limit_y - m_cell_resol;
@@ -379,7 +395,7 @@ void InformationEstimates::updateCellLimits(
         cell_limits[3] = limit_y;
     }
 
-    if (final_grid_pos[0] < robot_grid_pos[0] && final_grid_pos[1] < robot_grid_pos[1])
+    if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() < robot_grid_pos.GetY())
     {
         // X minor and Y minor. WRO final points
         initial_x[2] = limit_x - m_cell_resol;
@@ -559,16 +575,14 @@ int InformationEstimates::signum(int num)
     return 0;
 }
 
-std::vector<int> InformationEstimates::getGridPosition(double x, double y)
+karto::Vector2<int> InformationEstimates::getGridPosition(double x, double y)
 {
-    /*
-        To maps the current position into grid coordinates
-    */
     int x_cell = floor((x / m_cell_resol));
     int y_cell = floor((y / m_cell_resol));
 
-    return {x_cell, y_cell};
+    return karto::Vector2<int>{x_cell, y_cell};
 }
+
 
 std::vector<double> InformationEstimates::laserHitDistance(std::vector<double> const& robot_pose, double range, double angle)
 {
