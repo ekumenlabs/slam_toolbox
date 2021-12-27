@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include "lib/karto_sdk/include/karto_sdk/Karto.h"
 
+#include "slam_toolbox/slam_toolbox_common.hpp"
+#include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
+
 class InformationEstimates
 {
     typedef std::tuple<int, int, int> map_tuple;
@@ -32,6 +35,9 @@ public:
         }
     };
 
+public:
+    float calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& karto_pose);
+
 private:
     // Testing
     void scannerTest();
@@ -44,15 +50,13 @@ private:
 
     // Grid and position information
     std::pair<std::vector<int>, std::vector<int>> rayCasting(karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt);
-    karto::Vector2<int> getGridPosition(double x, double y);
-    std::vector<double> laserHitDistance(std::vector<double> const& robot_pose, double range, double angle);
-    std::vector<double> calculateCellIntersectionPoints(std::vector<double> const& laser_start, std::vector<double> const& laser_end, std::vector<double> cell_start, std::vector<double> cell_end);
-    int signum(int num);
-
+    karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& pose);
+    std::vector<double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, std::vector<double> cell_start, std::vector<double> cell_end);
     std::pair<std::vector<double>, std::vector<double>> computeLineBoxIntersection(
-        std::vector<double> const& laser_start, std::vector<double> const& laser_end, 
-        karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos, 
+        karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
+        karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
         double limit_x, double limit_y);
+    int signum(int num);
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     double calculateScanMassProbabilityBetween(double range_1, double range_2);
@@ -108,13 +112,6 @@ private:
     void setObservationNu(double const nu);
     void setCellResolution(double const resolution);
     void setMapDistance(double const distance);
-
-    karto::Vector2<kt_double> point;
-    // This pose will save actual robot poses
-    karto::Pose2 pose;
-    
-    std::vector<karto::Pose2> poses;
-
 };
 
 #endif

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <math.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
 InformationEstimates::InformationEstimates()
@@ -6,8 +7,9 @@ InformationEstimates::InformationEstimates()
     /*
         Need to add the new elements for the constructor
     */
-    m_cell_resol = 0.5f; // Map resolution
-    m_map_dist = 20.0f; // Total map distance
+
+    m_cell_resol = 0.05f; // Map resolution
+    m_map_dist = 200.0f; // Total map distance
     m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
 
     // Grids initialization (Occupancy and Mutual information)
@@ -16,127 +18,81 @@ InformationEstimates::InformationEstimates()
     visited_cells.resize(m_num_cells);
     initializeGrids();
 
-    scannerTest();
-
-
-    poses.push_back(karto::Pose2{1.78512, 2.1213 , M_PI});
-
-    karto::Pose2 pose = poses[0];
-    std::cout << pose.GetX() << std::endl;
-    std::cout << pose.GetY() << std::endl;
-    std::cout << pose.GetHeading() << std::endl;
+    // scannerTest();
 }
 
-void InformationEstimates::scannerTest()
+float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& robot_pose)
 {
-    // Loop through the different robot poses
-    for (int r = 0; r < robot_poses.size(); ++r)
+    karto::Vector2<int> robot_grid_pos_1 = getGridPosition(robot_pose.GetPosition());
+
+    // Set as false the current boolean map
+    clearVisitedCells();
+
+    // for (int i = 0; i < laser_ranges[r].size(); ++i)
+    for (int i = 0; i < laser_readings.size(); ++i)
     {
-        std::cout << "-------------------- Robot pose --------------------: " << r << std::endl;
+        // Laser final cell
+        karto::Vector2<int> final_grid_pos_1 = getGridPosition(laser_readings[i]);
 
-        // Angles {-50, -25, 0, 25, 50} in degrees
-        std::vector<double> angles{-0.87266f, -0.43633f, 0.0f, 0.43633f, 0.87266f};
+        // Ray tracing for getting the visited cells
+        std::vector<int> cells_x, cells_y;
+        std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos_1, final_grid_pos_1);
+        cells_x = res_pair.first;
+        cells_y = res_pair.second;
 
-        karto::Vector2<int> robot_grid_pos_1 = getGridPosition(robot_poses[r][0], robot_poses[r][1]);
-
-        // Set as false the current boolean map
-        clearVisitedCells();
-
-        /*
-        * Laser callback message
-        sensor_msgs::msg::LaserScan::ConstSharedPtr scan
-
-        * Double checking that current laser can be used
-        LaserRangeFinder * laser = getLaser(scan);
-        
-        * Localized range scan when the laser object, the laser scan and the pose are given 
-        LocalizedRangeScan * range_scan = addScan(laser, scan, pose);
-
-        * Point readings 
-        const PointVectorDouble & pts = candidate_scan->GetPointReadings(true);
-        PointVectorDouble::const_iterator pt_it;
-        */
-
-        for (int i = 0; i < laser_ranges[r].size(); ++i)
+        // Visiting the cells
+        for (int j = 0; j < cells_x.size(); ++j)
         {
-            std::cout << "................ New laser ................" << std::endl;
-            std::cout << "Distance: " << laser_ranges[r][i] << ", Angle: " << angles[i] << std::endl;
+            // Inidividual cell limits
+            double limit_x = cells_x[j] * m_cell_resol;
+            double limit_y = cells_y[j] * m_cell_resol;
 
-            // This is the transformation - Should use Transform from Karto
+            std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid_pos_1, final_grid_pos_1, limit_x, limit_y);
 
-            // Laser continuous distance -- This function will potentnally not be used
-            std::vector<double> laser_end = laserHitDistance(robot_poses[r], laser_ranges[r][i], angles[i]);
+            if (intersections.first.size() == 0)
+                continue;
 
-            // Laser final cell
-            karto::Vector2<int> final_grid_pos_1 = getGridPosition(laser_end[0], laser_end[1]);
-
-            // Ray tracing for getting the visited cells
-            std::vector<int> cells_x, cells_y;
-            // I can change the returnign type as well
-            std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos_1, final_grid_pos_1);
-            cells_x = res_pair.first;
-            cells_y = res_pair.second;
-
-            // Visiting the cells
-            for (int j = 0; j < cells_x.size(); ++j)
+            // Enter (d1) and Exit (d2) distances
+            std::vector<double> distances;
+            for (int k = 0; k < intersections.first.size(); ++k)
             {
-                // Cells visualization
-                std::cout << "Current cell: " << cells_x[j] << ", " << cells_y[j] << std::endl;
-
-                // Inidividual cell limits
-                double limit_x = cells_x[j] * m_cell_resol;
-                double limit_y = cells_y[j] * m_cell_resol;
-
-                std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_poses[r], laser_end, robot_grid_pos_1, final_grid_pos_1, limit_x, limit_y);
-
-                if (intersections.first.size() == 0)
-                    continue;
-
-                // Enter (d1) and Exit (d2) distances
-                std::vector<double> distances;
-                for (int k = 0; k < intersections.first.size(); ++k)
-                {
-                    // From robot position to intersection points
-                    double dist_point = euclideanDistance(robot_poses[r][0], robot_poses[r][1], intersections.first[k], intersections.second[k]);
-                    distances.push_back(dist_point);
-                }
-
-                // Integral 1: 0 to d1 which is distance from robot pose to first point where the cell is cut
-                // Integral 2: d1 which is distance from robot pose to first point where the cell is cut to
-                // d2 which is distance from robot pose to second point where the cell is cut
-                // Integral 3: d2 which is distance from robot pose to second point where the cell is cut to z_max
-
-                // Measurement outcomes vector {Pfree, Pocc, Pun}
-                // Map of tuples
-                std::vector<double> probabilities {
-                    calculateScanMassProbabilityBetween(distances[1], 5.0f),
-                    calculateScanMassProbabilityBetween(distances[0], distances[1]),
-                    calculateScanMassProbabilityBetween(0.0f, distances[0])
-                };
-
-                // Appending new measurement outcomes for the current cell
-                appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
-
-                // Get all the measurement outcomes for the current cell
-                std::vector<std::vector<double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
-
-                // Compute all the possible combinations for the current cell - algorithm 1
-                std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
-                
-                double cell_mutual_inf = 0.0f;
-                for (auto& pair : meas_out_prob)
-                {
-                    cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
-                }
-
-                // Mutual information of cell x, y given a set of measurements                
-                updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
-                std::cout << "++++++++++++++++++++++++" << std::endl;
+                // From robot position to intersection points
+                karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
+                kt_double distance = robot_pose.GetPosition().Distance(intersection);
+                distances.push_back(distance);
             }
+
+            // Measurement outcomes vector {Pfree, Pocc, Pun}
+            std::vector<double> probabilities {
+                calculateScanMassProbabilityBetween(distances[1], 5.0f),
+                calculateScanMassProbabilityBetween(distances[0], distances[1]),
+                calculateScanMassProbabilityBetween(0.0f, distances[0])
+            };
+
+            // Appending new measurement outcomes for the current cell
+            appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
+
+            // Get all the measurement outcomes for the current cell
+            std::vector<std::vector<double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
+
+            // Compute all the possible combinations for the current cell - algorithm 1
+            std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
+            
+            double cell_mutual_inf = 0.0f;
+            for (auto& pair : meas_out_prob)
+            {
+                cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
+            }
+
+            // Mutual information of cell x, y given a set of measurements                
+            updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
+            std::cout << "++++++++++++++++++++++++" << std::endl;
         }
-        double mutual = calculateMapMutualInformation();
-        std::cout << "Mutual information: " << mutual << std::endl;
     }
+    double mutual = calculateMapMutualInformation();
+    std::cout << "Mutual information: " << mutual << std::endl;
+
+    return 0.5f;
 }
 
 void InformationEstimates::clearVisitedCells()
@@ -184,9 +140,6 @@ void InformationEstimates::appendCellProbabilities(std::vector<double>& measurem
             int idx = it_cell->second.size() - 1;
             if(measurements[2] < it_cell->second[idx][2])
             {
-                // std::cout << "Replacing:" << it_cell->second[idx][0] << ", " << it_cell->second[idx][1] << ", " << it_cell->second[idx][2] << std::endl;
-                // std::cout << "With:" << measurements[0] << ", " << measurements[1] << ", " << measurements[2] << std::endl;
-
                 // Replacing
                 it_cell->second[idx][0] = measurements[0];
                 it_cell->second[idx][1] = measurements[1];
@@ -284,7 +237,7 @@ double InformationEstimates::calculateInformationContent(double prob)
 }
 
 std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
-    std::vector<double> const& laser_start, std::vector<double> const& laser_end,
+    karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
     std::vector<double> cell_start, std::vector<double> cell_end)
 {
     /*
@@ -293,13 +246,17 @@ std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
         Initial point cell: cell_start
         Final point cell: cell_end
     */
-    double x1 = laser_start[0];
-    double x2 = laser_end[0];
+    // double x1 = laser_start[0];
+    // double x2 = laser_end[0];
+    double x1 = laser_start.GetX();
+    double x2 = laser_end.GetX();
     double x3 = cell_start[0];
     double x4 = cell_end[0];
 
-    double y1 = laser_start[1];
-    double y2 = laser_end[1];
+    // double y1 = laser_start[1];
+    // double y2 = laser_end[1];
+    double y1 = laser_start.GetY();
+    double y2 = laser_end.GetY();
     double y3 = cell_start[1];
     double y4 = cell_end[1];
 
@@ -318,7 +275,7 @@ std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
 }
 
 std::pair<std::vector<double>, std::vector<double>> InformationEstimates::computeLineBoxIntersection(
-    std::vector<double> const& laser_start, std::vector<double> const& laser_end, 
+    karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
     karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
     double limit_x, double limit_y)
 {
@@ -575,25 +532,12 @@ int InformationEstimates::signum(int num)
     return 0;
 }
 
-karto::Vector2<int> InformationEstimates::getGridPosition(double x, double y)
+karto::Vector2<int> InformationEstimates::getGridPosition(karto::Vector2<kt_double> const& pose)
 {
-    int x_cell = floor((x / m_cell_resol));
-    int y_cell = floor((y / m_cell_resol));
+    int x_cell = floor((pose.GetX() / m_cell_resol));
+    int y_cell = floor((pose.GetY() / m_cell_resol));
 
     return karto::Vector2<int>{x_cell, y_cell};
-}
-
-
-std::vector<double> InformationEstimates::laserHitDistance(std::vector<double> const& robot_pose, double range, double angle)
-{
-    /*
-        To get the distance where the laser beam hits something
-            - Applying RBT from the global to the sensor frame
-    */
-    double x_tf = (range * cos(robot_pose[2] + angle)) + robot_pose[0];
-    double y_tf = (range * sin(robot_pose[2] + angle)) + robot_pose[1];
-
-    return {x_tf, y_tf};
 }
 
 void InformationEstimates::initializeGrids()
