@@ -7,17 +7,16 @@ InformationEstimates::InformationEstimates()
     /*
         Need to add the new elements for the constructor
     */
+    // Here we can modify the dimensions, so we can handle not only square grids 
 
     m_cell_resol = 0.05f; // Map resolution
     m_map_dist = 200.0f; // Total map distance
     m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
 
     // Grids initialization (Occupancy and Mutual information)
-    m_grid.resize(m_num_cells);
     m_mutual_grid.resize(m_num_cells);
-    visited_cells.resize(m_num_cells);
+    m_visited_grid.resize(m_num_cells);
     initializeGrids();
-
 
     // Test 
     karto::Vector2<kt_double> point_2{3.0, 2.0};
@@ -99,13 +98,13 @@ float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble 
 void InformationEstimates::clearVisitedCells()
 {
     /*
-        To clear the visited cell
+        To clear the visited cells
     */
-    for (int i = 0; i < visited_cells.size(); ++i)
+    for (int i = 0; i < m_visited_grid.size(); ++i)
     {
-        for (int j = 0; j < visited_cells[0].size(); ++j)
+        for (int j = 0; j < m_visited_grid[0].size(); ++j)
         {
-            visited_cells[i][j] = false;
+            m_visited_grid[i][j] = false;
         }
     }
 }
@@ -123,11 +122,11 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
         // Cell is not present in the map, so append it
         m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<kt_double>>>(
             {cell[0], cell[1]}, {{measurements[0], measurements[1], measurements[2]}}));
-        visited_cells[cell[0]][cell[1]] = true;
+        m_visited_grid[cell[0]][cell[1]] = true;
     }
     else
     {
-        if(visited_cells[cell[0]][cell[1]] == true)
+        if(m_visited_grid[cell[0]][cell[1]] == true)
         {
             // Compare the unknown probability, the smallest it is the most information we will have
             // from the occupied or free state
@@ -144,7 +143,7 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
         {
             // Cell is already in the map, only add the next measurement outcome
             it_cell->second.push_back({measurements[0], measurements[1], measurements[2]});
-            visited_cells[cell[0]][cell[1]] = true;
+            m_visited_grid[cell[0]][cell[1]] = true;
         }
     }
 }
@@ -468,7 +467,6 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, InformationEstima
                     acc_prob.push_back(pair.second * un_prop);
                 }
             }
-            tup_vct.begin()
         }
         // Inserting the elements into the map
         for (int k = 0; k < tup_vct.size(); ++k)
@@ -483,7 +481,7 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, InformationEstima
     {
         int idx_free, idx_occ, idx_unk;
         std::tie(idx_free, idx_occ, idx_unk) = pair.first;
-        if (idx_free + idx_occ + unk == k)
+        if (idx_free + idx_occ + idx_unk == k)
         {
             out_map[pair.first] = pair.second;
         }
@@ -517,14 +515,12 @@ void InformationEstimates::initializeGrids()
     for (int i = 0; i < m_num_cells; ++i)
     {
         // Adding columns
-        m_grid[i].resize(m_num_cells);
         m_mutual_grid[i].resize(m_num_cells);
-        visited_cells[i].resize(m_num_cells);
+        m_visited_grid[i].resize(m_num_cells);
         for (int j = 0; j < m_num_cells; ++j)
         {
-            m_grid[i][j] = 0;
             m_mutual_grid[i][j] = 0.0f;
-            visited_cells[i][j] = false;
+            m_visited_grid[i][j] = false;
         }
     }
 }
@@ -539,7 +535,6 @@ kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_
     */
     int num_free, num_occ, num_unk; 
     std::tie(num_free, num_occ, num_unk) = meas_outcome;
-    
     kt_double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
     kt_double prob_occ = calculateProbabilityFromLogOdds(log_occ);
     return calculateInformationContent(prob_occ);

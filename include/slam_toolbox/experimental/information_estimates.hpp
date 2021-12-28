@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include "lib/karto_sdk/include/karto_sdk/Karto.h"
 
+// #include "utils.hpp"
+
 #include "slam_toolbox/slam_toolbox_common.hpp"
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
 
@@ -54,6 +56,7 @@ private:
         karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
         kt_double limit_x, kt_double limit_y);
     int signum(int num);
+    void clearVisitedCells();
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
@@ -72,14 +75,13 @@ private:
     std::unordered_map<map_tuple, kt_double, HashTuple> computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm);
     std::vector<std::vector<kt_double>> retreiveCellProbabilities(std::vector<int> cell);
 
-    void clearVisitedCells();
 
 private:
     // Data structures 
     std::unordered_map<map_tuple, kt_double, HashTuple> m_map_out;
     std::map<std::vector<int>, std::vector<std::vector<kt_double>>> m_cell_probabilities;
     std::vector<std::vector<kt_double>> m_mutual_grid;
-    std::vector<std::vector<int>> m_grid;
+    std::vector<std::vector<bool>> m_visited_grid;
 
     kt_double m_map_dist;
     kt_double m_cell_resol;
@@ -89,7 +91,6 @@ private:
     const kt_double l_occ = log(0.7 / (1.0 - 0.7));
     const kt_double l_o = log(0.5 / (1.0 - 0.5));
 
-    std::vector<std::vector<bool>> visited_cells;
 
     kt_double m_max_sensor_range = 5.0;
     kt_double m_obs_lambda = 0.35; 
