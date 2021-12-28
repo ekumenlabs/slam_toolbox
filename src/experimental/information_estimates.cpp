@@ -18,25 +18,30 @@ InformationEstimates::InformationEstimates()
     visited_cells.resize(m_num_cells);
     initializeGrids();
 
-    // scannerTest();
+
+    // Test 
+    karto::Vector2<kt_double> point_2{3.0, 2.0};
+    karto::Vector2<kt_double> point_1{0.0, 0.0};
+    kt_double distance = point_1.Distance(point_2);
+
+    std::cout << distance << std::endl;
 }
 
 float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& robot_pose)
 {
-    karto::Vector2<int> robot_grid_pos_1 = getGridPosition(robot_pose.GetPosition());
+    karto::Vector2<int> robot_grid = getGridPosition(robot_pose.GetPosition());
 
     // Set as false the current boolean map
     clearVisitedCells();
 
-    // for (int i = 0; i < laser_ranges[r].size(); ++i)
     for (int i = 0; i < laser_readings.size(); ++i)
     {
         // Laser final cell
-        karto::Vector2<int> final_grid_pos_1 = getGridPosition(laser_readings[i]);
+        karto::Vector2<int> beam_grid = getGridPosition(laser_readings[i]);
 
         // Ray tracing for getting the visited cells
         std::vector<int> cells_x, cells_y;
-        std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid_pos_1, final_grid_pos_1);
+        std::pair<std::vector<int>, std::vector<int>> res_pair = rayCasting(robot_grid, beam_grid);
         cells_x = res_pair.first;
         cells_y = res_pair.second;
 
@@ -44,16 +49,16 @@ float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble 
         for (int j = 0; j < cells_x.size(); ++j)
         {
             // Inidividual cell limits
-            double limit_x = cells_x[j] * m_cell_resol;
-            double limit_y = cells_y[j] * m_cell_resol;
+            kt_double limit_x = cells_x[j] * m_cell_resol;
+            kt_double limit_y = cells_y[j] * m_cell_resol;
 
-            std::pair<std::vector<double>, std::vector<double>> intersections = computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid_pos_1, final_grid_pos_1, limit_x, limit_y);
+            std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y);
 
             if (intersections.first.size() == 0)
                 continue;
 
             // Enter (d1) and Exit (d2) distances
-            std::vector<double> distances;
+            std::vector<kt_double> distances;
             for (int k = 0; k < intersections.first.size(); ++k)
             {
                 // From robot position to intersection points
@@ -63,7 +68,7 @@ float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble 
             }
 
             // Measurement outcomes vector {Pfree, Pocc, Pun}
-            std::vector<double> probabilities {
+            std::vector<kt_double> probabilities {
                 calculateScanMassProbabilityBetween(distances[1], 5.0f),
                 calculateScanMassProbabilityBetween(distances[0], distances[1]),
                 calculateScanMassProbabilityBetween(0.0f, distances[0])
@@ -73,12 +78,12 @@ float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble 
             appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
 
             // Get all the measurement outcomes for the current cell
-            std::vector<std::vector<double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
+            std::vector<std::vector<kt_double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
 
             // Compute all the possible combinations for the current cell - algorithm 1
-            std::unordered_map<map_tuple, double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
+            std::unordered_map<map_tuple, kt_double, HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
             
-            double cell_mutual_inf = 0.0f;
+            kt_double cell_mutual_inf = 0.0f;
             for (auto& pair : meas_out_prob)
             {
                 cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
@@ -86,13 +91,9 @@ float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble 
 
             // Mutual information of cell x, y given a set of measurements                
             updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
-            std::cout << "++++++++++++++++++++++++" << std::endl;
         }
     }
-    double mutual = calculateMapMutualInformation();
-    std::cout << "Mutual information: " << mutual << std::endl;
-
-    return 0.5f;
+    return calculateMapMutualInformation();
 }
 
 void InformationEstimates::clearVisitedCells()
@@ -100,8 +101,6 @@ void InformationEstimates::clearVisitedCells()
     /*
         To clear the visited cell
     */
-
-    std::cout << "Clearing cells " << std::endl;
     for (int i = 0; i < visited_cells.size(); ++i)
     {
         for (int j = 0; j < visited_cells[0].size(); ++j)
@@ -111,32 +110,27 @@ void InformationEstimates::clearVisitedCells()
     }
 }
 
-void InformationEstimates::appendCellProbabilities(std::vector<double>& measurements, std::vector<int> cell)
+void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, std::vector<int> cell)
 {
     /*
         To append a new measurement for a specific cell
     */
-    std::map<std::vector<int>, std::vector<std::vector<double>>>::iterator it_cell;
+    std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
 
     it_cell = m_cell_probabilities.find({cell[0], cell[1]});
-
     if (it_cell == m_cell_probabilities.end())
     {
         // Cell is not present in the map, so append it
-        m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<double>>>(
-        {cell[0], cell[1]},
-        {{measurements[0], measurements[1], measurements[2]}}
-        ));
+        m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<kt_double>>>(
+            {cell[0], cell[1]}, {{measurements[0], measurements[1], measurements[2]}}));
         visited_cells[cell[0]][cell[1]] = true;
     }
     else
     {
         if(visited_cells[cell[0]][cell[1]] == true)
         {
-            /*
-                Compare the unknown probability, the smallest it is the most information we will have
-                from the occupied or free state
-            */
+            // Compare the unknown probability, the smallest it is the most information we will have
+            // from the occupied or free state
             int idx = it_cell->second.size() - 1;
             if(measurements[2] < it_cell->second[idx][2])
             {
@@ -181,10 +175,7 @@ std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(k
         delta_y = temp;
         interchange = true;
     }
-    else
-    {
-        interchange = false;
-    }
+    else { interchange = false; }
 
     int a_res = 2 * delta_y;
     int b_res = 2 * (delta_y - delta_x);
@@ -197,14 +188,8 @@ std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(k
     {
         if (e_res < 0)
         {
-            if (interchange)
-            {
-                y += s_y;
-            }
-            else
-            {
-                x += s_x;
-            }
+            if (interchange) { y += s_y; }
+            else { x += s_x; }
             e_res += a_res;
         }
         else
@@ -227,7 +212,7 @@ std::pair<std::vector<int>, std::vector<int>> InformationEstimates::rayCasting(k
     return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
 }
 
-double InformationEstimates::calculateInformationContent(double prob)
+kt_double InformationEstimates::calculateInformationContent(kt_double prob)
 {
     /*
         To calculate the information content or self-information
@@ -236,9 +221,9 @@ double InformationEstimates::calculateInformationContent(double prob)
     return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
 }
 
-std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
+std::vector<kt_double> InformationEstimates::calculateCellIntersectionPoints(
     karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
-    std::vector<double> cell_start, std::vector<double> cell_end)
+    std::vector<kt_double> cell_start, std::vector<kt_double> cell_end)
 {
     /*
         Initial point laser beam: laser_start
@@ -246,21 +231,17 @@ std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
         Initial point cell: cell_start
         Final point cell: cell_end
     */
-    // double x1 = laser_start[0];
-    // double x2 = laser_end[0];
-    double x1 = laser_start.GetX();
-    double x2 = laser_end.GetX();
-    double x3 = cell_start[0];
-    double x4 = cell_end[0];
+    kt_double x1 = laser_start.GetX();
+    kt_double x2 = laser_end.GetX();
+    kt_double x3 = cell_start[0];
+    kt_double x4 = cell_end[0];
 
-    // double y1 = laser_start[1];
-    // double y2 = laser_end[1];
-    double y1 = laser_start.GetY();
-    double y2 = laser_end.GetY();
-    double y3 = cell_start[1];
-    double y4 = cell_end[1];
+    kt_double y1 = laser_start.GetY();
+    kt_double y2 = laser_end.GetY();
+    kt_double y3 = cell_start[1];
+    kt_double y4 = cell_end[1];
 
-    double den = ((x2-x1)*(y4-y3) - (x4-x3)*(y2-y1));
+    kt_double den = ((x2-x1)*(y4-y3) - (x4-x3)*(y2-y1));
     if (den == 0.0f)
     {
         // Parallel lines or not intersection at all
@@ -268,36 +249,36 @@ std::vector<double> InformationEstimates::calculateCellIntersectionPoints(
     }
     else
     {
-        double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2-x1)) / den;
-        double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2-y1)) / den;
+        kt_double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2 - x1)) / den;
+        kt_double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2 - y1)) / den;
         return {x, y};
     }
 }
 
-std::pair<std::vector<double>, std::vector<double>> InformationEstimates::computeLineBoxIntersection(
+std::pair<std::vector<kt_double>, std::vector<kt_double>> InformationEstimates::computeLineBoxIntersection(
     karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
     karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
-    double limit_x, double limit_y)
+    kt_double limit_x, kt_double limit_y)
 {
     // Cell limits: min_x, max_x, min_y, max_y
-    std::vector<double> cell_limits {limit_x, limit_x + m_cell_resol, limit_y, limit_y + m_cell_resol};
+    std::vector<kt_double> cell_limits {limit_x, limit_x + m_cell_resol, limit_y, limit_y + m_cell_resol};
 
     // Initial points for each of the 4 corners
-    std::vector<double> initial_x {limit_x, limit_x, limit_x + m_cell_resol, limit_x + m_cell_resol};
-    std::vector<double> initial_y {limit_y, limit_y, limit_y + m_cell_resol, limit_y + m_cell_resol};
+    std::vector<kt_double> initial_x {limit_x, limit_x, limit_x + m_cell_resol, limit_x + m_cell_resol};
+    std::vector<kt_double> initial_y {limit_y, limit_y, limit_y + m_cell_resol, limit_y + m_cell_resol};
     
     // Final points for each of the 4 corners
-    std::vector<double> final_x {limit_x + m_cell_resol, limit_x, limit_x + m_cell_resol, limit_x};
-    std::vector<double> final_y {limit_y, limit_y + m_cell_resol, limit_y, limit_y + m_cell_resol};
+    std::vector<kt_double> final_x {limit_x + m_cell_resol, limit_x, limit_x + m_cell_resol, limit_x};
+    std::vector<kt_double> final_y {limit_y, limit_y + m_cell_resol, limit_y, limit_y + m_cell_resol};
 
     // Set the new cell limits
     updateCellLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, cell_limits, robot_grid_pos, final_grid_pos);
 
-    std::vector<double> inter_x, inter_y;
+    std::vector<kt_double> inter_x, inter_y;
 
     for (int k = 0; k < 4; ++k)
     {
-        std::vector<double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
+        std::vector<kt_double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
         if(intersection.size() != 0)
         {
             if ((fabs(intersection[0]) >= (fabs(cell_limits[0]) - 0.001)) &&
@@ -315,16 +296,12 @@ std::pair<std::vector<double>, std::vector<double>> InformationEstimates::comput
             }
         }
     }
-    return std::pair<std::vector<double>, std::vector<double>>{inter_x, inter_y}; 
+    return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y}; 
 }
 
-// void InformationEstimates::updateCellLimits(
-//     std::vector<double>& initial_x, std::vector<double>& initial_y, std::vector<double>& final_x, std::vector<double>& final_y,
-//     double limit_x, double limit_y, std::vector<double>& cell_limits, std::vector<int> const& robot_grid_pos, std::vector<int> const& final_grid_pos)
-// {
 void InformationEstimates::updateCellLimits(
-    std::vector<double>& initial_x, std::vector<double>& initial_y, std::vector<double>& final_x, std::vector<double>& final_y,
-    double limit_x, double limit_y, std::vector<double>& cell_limits, karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos)
+    std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x, std::vector<kt_double>& final_y,
+    kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos)
 {
     /*
         To calculate grid grid limits for intersection
@@ -372,7 +349,7 @@ void InformationEstimates::updateCellLimits(
     }
 }
 
-double InformationEstimates::calculateLogOddsFromProbability(double probability)
+kt_double InformationEstimates::calculateLogOddsFromProbability(kt_double probability)
 {
     /*
         To calculate the log-odds
@@ -381,13 +358,13 @@ double InformationEstimates::calculateLogOddsFromProbability(double probability)
     return log(probability / (1 - probability));
 }
 
-double InformationEstimates::calculateMapMutualInformation()
+kt_double InformationEstimates::calculateMapMutualInformation()
 {
     /*
         To calculate map mutual information, this is the summation
         of all cells mutual information
     */
-    double sum = 0.0f;
+    kt_double sum = 0.0f;
     for (int i = 0; i < m_num_cells; ++i)
     {
         for (int j = 0; j < m_num_cells; ++j)
@@ -398,7 +375,7 @@ double InformationEstimates::calculateMapMutualInformation()
     return sum;
 }
 
-double InformationEstimates::calculateProbabilityFromLogOdds(double log)
+kt_double InformationEstimates::calculateProbabilityFromLogOdds(kt_double log)
 {
     /*
         To transform the Log-odds into probability
@@ -407,20 +384,20 @@ double InformationEstimates::calculateProbabilityFromLogOdds(double log)
     return (exp(log) / (1 + exp(log)));
 }
 
-std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<double>>& meas_outcm)
+std::unordered_map<InformationEstimates::map_tuple, kt_double, InformationEstimates::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm)
 {
     /*
         To compute all the possible combinations of a grid cell, given a set of measurement outcomes
     */
-    std::unordered_map<map_tuple, double, HashTuple> temp_map;
+    std::unordered_map<map_tuple, kt_double, HashTuple> temp_map;
 
     // The number of measurements
     int k = meas_outcm.size(); 
     int r = 1;
 
-    double p_free = meas_outcm[0][0];
-    double p_occ = meas_outcm[0][1];
-    double p_un = meas_outcm[0][2];
+    kt_double p_free = meas_outcm[0][0];
+    kt_double p_occ = meas_outcm[0][1];
+    kt_double p_un = meas_outcm[0][2];
 
     temp_map.clear();
     
@@ -435,12 +412,12 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
     for (int r = 1; r < k; ++r)
     {
         std::vector<map_tuple> tup_vct;
-        std::vector<double> acc_prob;
+        std::vector<kt_double> acc_prob;
 
         // Measurement outcome probability
-        double free_prop = meas_outcm[r][0];
-        double occ_prop = meas_outcm[r][1];
-        double un_prop = meas_outcm[r][2];
+        kt_double free_prop = meas_outcm[r][0];
+        kt_double occ_prop = meas_outcm[r][1];
+        kt_double un_prop = meas_outcm[r][2];
 
         for (auto& pair : temp_map)        
         {
@@ -491,6 +468,7 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
                     acc_prob.push_back(pair.second * un_prop);
                 }
             }
+            tup_vct.begin()
         }
         // Inserting the elements into the map
         for (int k = 0; k < tup_vct.size(); ++k)
@@ -500,26 +478,17 @@ std::unordered_map<InformationEstimates::map_tuple, double, InformationEstimates
     }
 
     // Leaving in the map only the final outcomes
-    std::unordered_map<map_tuple, double, HashTuple> out_map;
+    std::unordered_map<map_tuple, kt_double, HashTuple> out_map;
     for (auto& pair : temp_map)
     {
-        if (std::get<0>(pair.first) + std::get<1>(pair.first) + std::get<2>(pair.first) == k)
+        int idx_free, idx_occ, idx_unk;
+        std::tie(idx_free, idx_occ, idx_unk) = pair.first;
+        if (idx_free + idx_occ + unk == k)
         {
             out_map[pair.first] = pair.second;
         }
     }
     return out_map;
-}
-
-double InformationEstimates::euclideanDistance(double x_1, double y_1, double x_2, double y_2)
-{
-    /*
-        To calculate the euclidean distance between two points
-    */
-    double diff_x = x_2 - x_1;
-    double diff_y = y_2 - y_1;
-
-    return sqrt(diff_x*diff_x + diff_y*diff_y);
 }
 
 int InformationEstimates::signum(int num)
@@ -560,7 +529,7 @@ void InformationEstimates::initializeGrids()
     }
 }
 
-double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_outcome)
+kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_outcome)
 {
     /*
         To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
@@ -571,12 +540,12 @@ double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_out
     int num_free, num_occ, num_unk; 
     std::tie(num_free, num_occ, num_unk) = meas_outcome;
     
-    double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
-    double prob_occ = calculateProbabilityFromLogOdds(log_occ);
+    kt_double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
+    kt_double prob_occ = calculateProbabilityFromLogOdds(log_occ);
     return calculateInformationContent(prob_occ);
 }
 
-double InformationEstimates::calculateScanMassProbabilityBetween(double range_1, double range_2)
+kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2)
 {
     /*
         To calculate the mass probability of a cell being observed by a given measurement
@@ -588,18 +557,18 @@ double InformationEstimates::calculateScanMassProbabilityBetween(double range_1,
     return m_obs_nu * (exp(-m_obs_lambda*range_1) - exp(-m_obs_lambda*range_2));
 }
 
-std::vector<std::vector<double>> InformationEstimates::retreiveCellProbabilities(std::vector<int> cell)
+std::vector<std::vector<kt_double>> InformationEstimates::retreiveCellProbabilities(std::vector<int> cell)
 {
     /*
         To get all the cell probabilities
     */
-    std::map<std::vector<int>, std::vector<std::vector<double>>>::iterator it_cells;
+    std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cells;
     it_cells = m_cell_probabilities.find({cell[0], cell[1]});
 
     return it_cells->second; 
 }
 
-void InformationEstimates::updateCellMutualInformation(double mut_inf, std::vector<int> cell)
+void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, std::vector<int> cell)
 {
     /*
         To update the mutual information for each individual cell
@@ -608,27 +577,27 @@ void InformationEstimates::updateCellMutualInformation(double mut_inf, std::vect
     m_mutual_grid[cell[0]][cell[1]] = mut_inf;
 }
 
-void InformationEstimates::setMaxSensorRange(double const sensor_range)
+void InformationEstimates::setMaxSensorRange(kt_double const sensor_range)
 {
     m_max_sensor_range = sensor_range;
 }
 
-void InformationEstimates::setObservationLambda(double const lambda)
+void InformationEstimates::setObservationLambda(kt_double const lambda)
 {
     m_obs_lambda = lambda;
 }
 
-void InformationEstimates::setObservationNu(double const nu)
+void InformationEstimates::setObservationNu(kt_double const nu)
 {
     m_obs_nu = nu;
 }
 
-void InformationEstimates::setCellResolution(double const resolution)
+void InformationEstimates::setCellResolution(kt_double const resolution)
 {
     m_cell_resol = resolution;
 }
 
-void InformationEstimates::setMapDistance(double const distance)
+void InformationEstimates::setMapDistance(kt_double const distance)
 {
     m_map_dist = distance;
 }
