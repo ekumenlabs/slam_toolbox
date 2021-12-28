@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include "lib/karto_sdk/include/karto_sdk/Karto.h"
 
-// #include "utils.hpp"
+#include "utils.hpp"
 
 #include "slam_toolbox/slam_toolbox_common.hpp"
 #include "slam_toolbox/experimental/slam_toolbox_lifelong.hpp"
