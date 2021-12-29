@@ -15,6 +15,7 @@ namespace utils
 {
     namespace grid_operations
     {
+        void test();
         void updateCellLimits(std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x, 
             std::vector<kt_double>& final_y, kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, 
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos, kt_double resolution);
@@ -31,9 +32,53 @@ namespace utils
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
             kt_double limit_x, kt_double limit_y, kt_double resolution);
 
+
         template<typename T>
-        void initializeGrid(std::vector<std::vector<T>> & grid, int num_rows, int num_columns);
+        void clearVisitedCells(std::vector<std::vector<T>> & grid)
+        {
+            for (int i = 0; i < grid.size(); ++i)
+            {
+                for (int j = 0; j < grid[0].size(); ++j)
+                {
+                    grid[i][j] = static_cast<T>(0);
+                }
+            }
+        }
+
+        template<typename T>
+        void initializeGrid(std::vector<std::vector<T>> & grid, int num_rows, int num_columns)
+        {
+            /*
+                To create the grid
+            */
+            grid.resize(num_rows);
+            for (int i = 0; i < num_rows; ++i)
+            {
+                // Adding columns
+                grid[i].resize(num_columns);
+                for (int j = 0; j < num_columns; ++j)
+                {
+                    grid[i][j] = static_cast<T>(0);
+                }
+            }
+        }
     } // namespace grid_operations
+
+    namespace tuple_hash
+    {
+        struct HashTuple
+        {
+            std::size_t operator() (std::tuple<int, int, int> const& key) const
+            {
+                std::size_t hash = 5381u;
+                hash = (hash << 5) + hash + std::get<0>(key);
+                hash = (hash << 5) + hash + std::get<1>(key);
+                hash = (hash << 5) + hash + std::get<2>(key);
+                return hash;
+            }
+        };
+    } // namespace tuple_hash
+
 } // namespace utils
 
 #endif
