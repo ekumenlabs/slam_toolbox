@@ -49,7 +49,8 @@ private:
 
 public:
     // Main function
-    float calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& karto_pose);
+    // float calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& karto_pose);
+    float calculateMutualInformation(std::vector<karto::LocalizedRangeScan> const& range_scans);
 
     // Setters
     void setMaxSensorRange(kt_double const sensor_range);

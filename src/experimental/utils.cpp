@@ -215,27 +215,5 @@ namespace utils
             return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y}; 
         }
 
-        // template<typename T>
-        // void initializeGrid(std::vector<std::vector<T>> & grid, int num_rows, int num_columns)
-        // {
-        //     /*
-        //         To create the grid
-        //     */
-        //     std::cout << "Grid Initializaion -----------------" << std::endl;
-        //     for (int i = 0; i < num_rows; ++i)
-        //     {
-        //         // Adding columns
-        //         grid[i].resize(num_columns);
-        //         for (int j = 0; j < num_columns; ++j)
-        //         {
-        //             grid[i][j] = static_cast<T>(0);
-        //         }
-        //     }
-        // }
-
-        void test()
-        {
-            std::cout << "Test" << std::endl;
-        }
     }// namespace grid_operations
 } // namespace utils

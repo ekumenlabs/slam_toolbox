@@ -13,78 +13,100 @@ InformationEstimates::InformationEstimates()
     utils::grid_operations::initializeGrid<bool>(m_visited_grid, m_num_cells, m_num_cells);
 }
 
-float InformationEstimates::calculateMutualInformation(karto::PointVectorDouble const& laser_readings, karto::Pose2 const& robot_pose)
+float InformationEstimates::calculateMutualInformation(std::vector<karto::LocalizedRangeScan> const& range_scans)
 {
-    m_laser_mutual_info = m_laser_mutual_info;
-    karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
+    /*
+        I should receive a vector of LocalizedRangeScan, 
+        For this I have two options, 
+        Either the vector is made upd outside this scope
+        Or I have a function for appending the range scans and the call this function for processing
+    */
 
-    // Set as false the current boolean map
-    utils::grid_operations::clearVisitedCells(m_visited_grid);
-
-    for (int i = 0; i < laser_readings.size(); ++i)
+    for (auto & scan : range_scans)
     {
-        // Laser final cell
-        karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(laser_readings[i], m_cell_resol);
+        karto::Pose2 robot_pose = scan.GetOdometricPose();
+        karto::PointVectorDouble laser_readings = scan.GetPointReadings(true);
 
-        // Ray tracing for getting the visited cells
-        std::vector<int> cells_x, cells_y;
-        std::pair<std::vector<int>, std::vector<int>> res_pair = utils::grid_operations::rayCasting(robot_grid, beam_grid);
+        m_laser_mutual_info = m_laser_mutual_info;
+        karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
 
-        cells_x = res_pair.first;
-        cells_y = res_pair.second;
+        // Set as false the current boolean map
+        utils::grid_operations::clearVisitedCells(m_visited_grid);
 
-        // Visiting the cells
-        for (int j = 0; j < cells_x.size(); ++j)
+        for (int i = 0; i < laser_readings.size(); ++i)
         {
-            // Inidividual cell limits
-            kt_double limit_x = cells_x[j] * m_cell_resol;
-            kt_double limit_y = cells_y[j] * m_cell_resol;
+            // Laser final cell
+            karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(laser_readings[i], m_cell_resol);
 
-            std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
+            // Ray tracing for getting the visited cells
+            std::vector<int> cells_x, cells_y;
+            std::pair<std::vector<int>, std::vector<int>> res_pair = utils::grid_operations::rayCasting(robot_grid, beam_grid);
 
-            if (intersections.first.size() == 0)
-                continue;
+            cells_x = res_pair.first;
+            cells_y = res_pair.second;
 
-            // Enter (d1) and Exit (d2) distances
-            std::vector<kt_double> distances;
-            for (int k = 0; k < intersections.first.size(); ++k)
+            // Visiting the cells
+            for (int j = 0; j < cells_x.size(); ++j)
             {
-                // From robot position to intersection points
-                karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
-                kt_double distance = robot_pose.GetPosition().Distance(intersection);
-                distances.push_back(distance);
+                // Inidividual cell limits
+                kt_double limit_x = cells_x[j] * m_cell_resol;
+                kt_double limit_y = cells_y[j] * m_cell_resol;
+
+                std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
+
+                if (intersections.first.size() == 0)
+                    continue;
+
+                // Enter (d1) and Exit (d2) distances
+                std::vector<kt_double> distances;
+                for (int k = 0; k < intersections.first.size(); ++k)
+                {
+                    // From robot position to intersection points
+                    karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
+                    kt_double distance = robot_pose.GetPosition().Distance(intersection);
+                    distances.push_back(distance);
+                }
+
+                // Measurement outcomes vector {Pfree, Pocc, Pun}
+                std::vector<kt_double> probabilities {
+                    calculateScanMassProbabilityBetween(distances[1], 5.0f),
+                    calculateScanMassProbabilityBetween(distances[0], distances[1]),
+                    calculateScanMassProbabilityBetween(0.0f, distances[0])
+                };
+
+                // Appending new measurement outcomes for the current cell
+                appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
+
+                // Get all the measurement outcomes for the current cell
+                std::vector<std::vector<kt_double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
+
+                // Compute all the possible combinations for the current cell - algorithm 1
+                std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
+                
+                kt_double cell_mutual_inf = 0.0f;
+                for (auto& pair : meas_out_prob)
+                {
+                    cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
+                }
+
+                // Mutual information of cell x, y given a set of measurements                
+                updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
             }
-
-            // Measurement outcomes vector {Pfree, Pocc, Pun}
-            std::vector<kt_double> probabilities {
-                calculateScanMassProbabilityBetween(distances[1], 5.0f),
-                calculateScanMassProbabilityBetween(distances[0], distances[1]),
-                calculateScanMassProbabilityBetween(0.0f, distances[0])
-            };
-
-            // Appending new measurement outcomes for the current cell
-            appendCellProbabilities(probabilities, {cells_x[j], cells_y[j]});
-
-            // Get all the measurement outcomes for the current cell
-            std::vector<std::vector<kt_double>> cell_prob = retreiveCellProbabilities({cells_x[j], cells_y[j]});
-
-            // Compute all the possible combinations for the current cell - algorithm 1
-            std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
-            
-            kt_double cell_mutual_inf = 0.0f;
-            for (auto& pair : meas_out_prob)
-            {
-                cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
-            }
-
-            // Mutual information of cell x, y given a set of measurements                
-            updateCellMutualInformation(0.5 - cell_mutual_inf, {cells_x[j], cells_y[j]});
         }
+        m_map_mutual_info = calculateMapMutualInformation(); 
+        
+        // Extract the mutual information provided by this laser scan
+        updateLaserMutualInformation();
     }
-    m_map_mutual_info = calculateMapMutualInformation(); 
-    
-    // Extract the mutual information provided by this laser scan
-    updateLaserMutualInformation();
+
+        // This would need to change
+    /*
+        I am returning the whole mutual information
+        But I can return either the index of the laser which provided minimal information and the actual value
+
+        Also I need to add function to clear the cells
+        And I need to add functions to get the right data
+    */
     return m_map_mutual_info;
 }
 

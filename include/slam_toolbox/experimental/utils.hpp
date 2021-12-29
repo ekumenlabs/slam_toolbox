@@ -15,7 +15,6 @@ namespace utils
 {
     namespace grid_operations
     {
-        void test();
         void updateCellLimits(std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x, 
             std::vector<kt_double>& final_y, kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, 
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos, kt_double resolution);
