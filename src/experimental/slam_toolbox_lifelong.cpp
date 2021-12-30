@@ -298,14 +298,12 @@ void LifelongSlamToolbox::removeFromSlamGraph(
   Vertex<LocalizedRangeScan> * vertex)
 /*****************************************************************************/
 {
-  smapper_->getMapper()->RemoveNodeFromGraph(vertex);
+  smapper_->getMapper()->MarginalizeNodeFromGraph(vertex);
   smapper_->getMapper()->GetMapperSensorManager()->RemoveScan(
     vertex->GetObject());
   dataset_->RemoveData(vertex->GetObject());
   vertex->RemoveObject();
   delete vertex;
-  vertex = nullptr;
-  // LTS what do we do about the contraints that node had about it?Nothing?Transfer?
 }
 
 /*****************************************************************************/
