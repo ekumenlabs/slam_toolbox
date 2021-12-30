@@ -8,7 +8,6 @@
 #include <cmath>
 #include <map>
 #include <unordered_map>
-
 #include "lib/karto_sdk/include/karto_sdk/Karto.h"
 
 namespace utils
@@ -20,7 +19,7 @@ namespace utils
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos, kt_double resolution);
 
         int signum(int num);
-        std::pair<std::vector<int>, std::vector<int>> rayCasting(karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt);
+        std::vector<karto::Vector2<int>> rayCasting(karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt);
         karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& pose, kt_double resolution);
 
         std::vector<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 

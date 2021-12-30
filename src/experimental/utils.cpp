@@ -65,15 +65,14 @@ namespace utils
             return 0;
         }
 
-        std::pair<std::vector<int>, std::vector<int>> rayCasting(
+        std::vector<karto::Vector2<int>> rayCasting(
             karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt)
         {
             /*
                 To find the set of cells hit by a laser beam
                 This is based on Bresenham algorithm
             */
-            std::vector<int> x_bres;
-            std::vector<int> y_bres;
+            std::vector<karto::Vector2<int>> cells;
 
             int x = initial_pt.GetX();
             int y = initial_pt.GetY();
@@ -98,8 +97,7 @@ namespace utils
             int b_res = 2 * (delta_y - delta_x);
             int e_res = (2 * delta_y) - delta_x;
 
-            x_bres.push_back(x);
-            y_bres.push_back(y);
+            cells.push_back(karto::Vector2<int>{x, y});
 
             for (int i = 1; i < delta_x; ++i)
             {
@@ -115,18 +113,15 @@ namespace utils
                     x += s_x;
                     e_res += b_res;
                 }
-                x_bres.push_back(x);
-                y_bres.push_back(y);
+                cells.push_back(karto::Vector2<int>{x, y});
             }
             // Delete the current robot cell
-            x_bres.erase(x_bres.begin());
-            y_bres.erase(y_bres.begin()); 
-                    
-            // Adding last hit cell to the set
-            x_bres.push_back(final_pt.GetX());
-            y_bres.push_back(final_pt.GetY());
+            cells.erase(cells.begin());
 
-            return std::pair<std::vector<int>, std::vector<int>>{x_bres, y_bres};
+            // Adding last hit cell to the set
+            cells.push_back(karto::Vector2<int>{final_pt.GetX(), final_pt.GetY()});
+
+            return cells;
         }
 
 

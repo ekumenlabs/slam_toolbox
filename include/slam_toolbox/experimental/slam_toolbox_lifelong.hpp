@@ -20,9 +20,6 @@
 #define SLAM_TOOLBOX__EXPERIMENTAL__SLAM_TOOLBOX_LIFELONG_HPP_
 
 #include <memory>
-#include <cmath>
-#include <math.h>
-#include <tuple>
 #include "slam_toolbox/slam_toolbox_common.hpp"
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
