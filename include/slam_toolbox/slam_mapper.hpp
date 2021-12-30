@@ -22,7 +22,7 @@
 #include <memory>
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 #include "tf2/utils.h"
 #include "slam_toolbox/toolbox_types.hpp"
 
