@@ -19,7 +19,11 @@
 #include <karto_sdk/Types.h>
 #include <math.h>
 #include <assert.h>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/kruskal_min_spanning_tree.hpp>
 #include <boost/serialization/vector.hpp>
+#include <Eigen/Core>
+#include <Eigen/Dense>
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
@@ -34,6 +38,7 @@
 #include <string>
 
 #include "karto_sdk/Mapper.h"
+#include "karto_sdk/Utils.h"
 
 BOOST_CLASS_EXPORT(karto::MapperGraph);
 BOOST_CLASS_EXPORT(karto::Graph<karto::LocalizedRangeScan>);
@@ -1616,6 +1621,40 @@ Edge<LocalizedRangeScan> * MapperGraph::AddEdge(
   return pEdge;
 }
 
+kt_bool MapperGraph::AddEdge(Edge<LocalizedRangeScan> * pEdge)
+{
+  using IteratorT = std::map<int, Vertex<LocalizedRangeScan> *>::iterator;
+
+  LocalizedRangeScan * pSourceScan = pEdge->GetSource()->GetObject();
+  LocalizedRangeScan * pTargetScan = pEdge->GetTarget()->GetObject();
+  IteratorT v1 = m_Vertices[pSourceScan->GetSensorName()]
+                 .find(pSourceScan->GetStateId());
+  IteratorT v2 = m_Vertices[pTargetScan->GetSensorName()]
+                 .find(pTargetScan->GetStateId());
+
+  if (v1 == m_Vertices[pSourceScan->GetSensorName()].end() ||
+    v2 == m_Vertices[pSourceScan->GetSensorName()].end())
+  {
+    std::cout << "AddEdge: At least one vertex is invalid." << std::endl;
+    return false;
+  }
+
+  // see if edge already exists
+  for (Edge<LocalizedRangeScan> * pOtherEdge : m_Edges) {
+    if (pEdge->GetSource() == pOtherEdge->GetSource() &&
+        pEdge->GetTarget() == pOtherEdge->GetTarget()) {
+      return false;
+    }
+    if (pEdge->GetTarget() == pOtherEdge->GetSource() &&
+        pEdge->GetSource() == pOtherEdge->GetTarget()) {
+      return false;
+    }
+  }
+
+  Graph<LocalizedRangeScan>::AddEdge(pEdge);
+  return true;
+}
+
 void MapperGraph::LinkScans(
   LocalizedRangeScan * pFromScan, LocalizedRangeScan * pToScan,
   const Pose2 & rMean, const Matrix3 & rCovariance)
@@ -2951,35 +2990,292 @@ void Mapper::ClearLocalizationBuffer()
   return;
 }
 
+namespace {
+
+Eigen::SparseMatrix<double> ComputeMarginalInformationMatrix(
+    const Eigen::SparseMatrix<double> & information_matrix,
+    const Eigen::Index discarded_variable_index,
+    const Eigen::Index discarded_variable_dimension)
+{
+  const Eigen::Index dimension = information_matrix.outerSize();
+  assert(dimension == information_matrix.innerSize());  // must be square
+  const Eigen::Index marginal_dimension = dimension - discarded_variable_dimension;
+  const Eigen::Index last_variable_index = dimension - discarded_variable_dimension;
+
+  Eigen::SparseMatrix<double>
+      information_submatrix_aa, information_submatrix_ab,
+      information_submatrix_ba, information_submatrix_bb;
+  if (discarded_variable_index == 0) {
+    information_submatrix_aa =
+        information_matrix.bottomRightCorner(
+            marginal_dimension, marginal_dimension);
+    information_submatrix_ab =
+        information_matrix.bottomLeftCorner(
+            marginal_dimension, discarded_variable_dimension);
+    information_submatrix_ba =
+        information_matrix.topRightCorner(
+            discarded_variable_dimension, marginal_dimension);
+    information_submatrix_bb =
+        information_matrix.topLeftCorner(
+            discarded_variable_dimension, discarded_variable_dimension);
+  } else if (discarded_variable_index == last_variable_index) {
+    information_submatrix_aa =
+        information_matrix.topLeftCorner(
+            marginal_dimension, marginal_dimension);
+    information_submatrix_ab =
+        information_matrix.topRightCorner(
+            marginal_dimension, discarded_variable_dimension);
+    information_submatrix_ba =
+        information_matrix.bottomLeftCorner(
+            discarded_variable_dimension, marginal_dimension);
+    information_submatrix_bb =
+        information_matrix.bottomRightCorner(
+            discarded_variable_dimension, discarded_variable_dimension);
+  } else {
+    const Eigen::Index next_variable_index =
+        discarded_variable_index + discarded_variable_dimension;
+    information_submatrix_aa = StackVertically(
+        StackHorizontally(
+            information_matrix.topLeftCorner(
+                discarded_variable_index,
+                discarded_variable_index),
+            information_matrix.topRightCorner(
+                discarded_variable_index,
+                dimension - next_variable_index)),
+        StackHorizontally(
+            information_matrix.bottomLeftCorner(
+                dimension - next_variable_index,
+                discarded_variable_index),
+            information_matrix.bottomRightCorner(
+                dimension - next_variable_index,
+                dimension - next_variable_index)));
+    information_submatrix_ab = StackVertically(
+        information_matrix.block(
+            0,
+            discarded_variable_index,
+            discarded_variable_index,
+            discarded_variable_dimension),
+        information_matrix.block(
+            next_variable_index,
+            discarded_variable_index,
+            dimension - next_variable_index,
+            discarded_variable_dimension));
+    information_submatrix_ba = StackHorizontally(
+        information_matrix.block(
+            discarded_variable_index,
+            0,
+            discarded_variable_dimension,
+            discarded_variable_index),
+        information_matrix.block(
+            discarded_variable_index,
+            next_variable_index,
+            discarded_variable_dimension,
+            dimension - next_variable_index));
+    information_submatrix_bb =
+        information_matrix.block(
+            discarded_variable_index,
+            discarded_variable_index,
+            discarded_variable_dimension,
+            discarded_variable_dimension);
+  }
+
+  return (information_submatrix_aa - information_submatrix_ba *
+          ComputeSparseInverse(information_submatrix_bb) *
+          information_submatrix_ab);
+}
+
+struct UncertainPose2 {
+  Pose2 mean;
+  Matrix3 covariance;
+};
+
+UncertainPose2 ComputeRelativePose2(
+    Pose2 source_pose, Pose2 target_pose,
+    Eigen::Matrix<double, 6, 6> joint_pose_covariance)
+{
+  UncertainPose2 relative_pose;
+  // Compute mean relative pose by transforming
+  // mean source and target poses
+  Transform source_transform(source_pose);
+  relative_pose.mean =
+      source_transform.InverseTransformPose(target_pose);
+  // Compute relative pose covariance by linearizing
+  // the transformation around mean source and target
+  // poses (aka SSC method).
+  Eigen::Matrix<double, 3, 6> transform_jacobian;
+  const double x_jk = relative_pose.mean.GetX();
+  const double y_jk = relative_pose.mean.GetY();
+  const double theta_ij = source_pose.GetHeading();
+  transform_jacobian <<
+      -cos(theta_ij), -sin(theta_ij),  y_jk,  cos(theta_ij), sin(theta_ij), 0.0,
+       sin(theta_ij), -cos(theta_ij), -x_jk, -sin(theta_ij), cos(theta_ij), 0.0,
+                 0.0,            0.0,  -1.0,            0.0,           0.0, 1.0;
+  relative_pose.covariance = Matrix3(
+      transform_jacobian * joint_pose_covariance *
+      transform_jacobian.transpose());
+  return relative_pose;
+}
+
+std::vector<Edge<LocalizedRangeScan> *> ComputeChowLiuTreeApproximation(
+  const std::vector<Vertex<LocalizedRangeScan> *> & elimination_clique,
+  const Eigen::SparseMatrix<double> & covariance_matrix)
+{
+  using WeightedGraphT = boost::adjacency_list<
+    boost::vecS, boost::vecS, boost::undirectedS, boost::no_property,
+    boost::property<boost::edge_weight_t, double>>;
+  WeightedGraphT elimination_clique_subgraph(elimination_clique.size());
+  for (size_t i = 0; i < elimination_clique.size() - 1; ++i) {
+    for (size_t j = i + 1; j < elimination_clique.size(); ++j) {
+      const auto covariance_submatrix_ii =
+          Eigen::Matrix3d{covariance_matrix.block(i, i, 3, 3)};
+      const auto covariance_submatrix_ij =
+          Eigen::Matrix3d{covariance_matrix.block(i, j, 3, 3)};
+      const auto covariance_submatrix_ji =
+          Eigen::Matrix3d{covariance_matrix.block(j, i, 3, 3)};
+      const auto covariance_submatrix_jj =
+          Eigen::Matrix3d{covariance_matrix.block(j, j, 3, 3)};
+      const double mutual_information =
+        0.5 * std::log2(covariance_submatrix_ii.determinant() / (
+            covariance_submatrix_ii - covariance_submatrix_ij *
+            covariance_submatrix_jj.inverse() *
+            covariance_submatrix_ji).determinant());
+      boost::add_edge(i, j, mutual_information, elimination_clique_subgraph);
+    }
+  }
+  using EdgeDescriptorT =
+      boost::graph_traits<WeightedGraphT>::edge_descriptor;
+  std::vector<EdgeDescriptorT> minimum_spanning_tree_edges;
+  boost::kruskal_minimum_spanning_tree(
+      elimination_clique_subgraph,
+      std::back_inserter(minimum_spanning_tree_edges));
+  using VertexDescriptorT =
+      boost::graph_traits<WeightedGraphT>::vertex_descriptor;
+  std::vector<Edge<LocalizedRangeScan> *> chow_liu_tree_approximation;
+  for (const EdgeDescriptorT & edge_descriptor : minimum_spanning_tree_edges) {
+    const VertexDescriptorT i = boost::source(
+        edge_descriptor, elimination_clique_subgraph);
+    const VertexDescriptorT j = boost::target(
+        edge_descriptor, elimination_clique_subgraph);
+    auto * edge = new Edge<LocalizedRangeScan>(elimination_clique[i],
+                                               elimination_clique[j]);
+    Eigen::Matrix<double, 6, 6> joint_pose_covariance_matrix;
+    joint_pose_covariance_matrix <<
+        Eigen::Matrix3d{covariance_matrix.block(i, i, 3, 3)},
+        Eigen::Matrix3d{covariance_matrix.block(i, j, 3, 3)},
+        Eigen::Matrix3d{covariance_matrix.block(j, i, 3, 3)},
+        Eigen::Matrix3d{covariance_matrix.block(j, j, 3, 3)};
+    LocalizedRangeScan * source_scan = edge->GetSource()->GetObject();
+    LocalizedRangeScan * target_scan = edge->GetTarget()->GetObject();
+    const UncertainPose2 relative_pose =
+        ComputeRelativePose2(source_scan->GetCorrectedPose(),
+                             target_scan->GetCorrectedPose(),
+                             joint_pose_covariance_matrix);
+    edge->SetLabel(new LinkInfo(
+        source_scan->GetCorrectedPose(),
+        target_scan->GetCorrectedPose(),
+        relative_pose.mean, relative_pose.covariance));
+    chow_liu_tree_approximation.push_back(edge);
+  }
+  return chow_liu_tree_approximation;
+}
+
+}  // namespace
+
+kt_bool Mapper::MarginalizeNodeFromGraph(
+    Vertex<LocalizedRangeScan> * vertex_to_marginalize)
+{
+  // (1) Fetch information matrix from solver
+  std::unordered_map<int, Eigen::Index> ordering;
+  const Eigen::SparseMatrix<double> information_matrix =
+      m_pScanOptimizer->GetInformationMatrix(&ordering);
+  // (2) Marginalize vertex from information matrix
+  constexpr Eigen::Index block_size = 3;
+  auto block_index_of = [&](Vertex<LocalizedRangeScan> * vertex) {
+    return ordering[vertex->GetObject()->GetUniqueId()];
+  };
+  const Eigen::Index marginalized_block_index =
+      block_index_of(vertex_to_marginalize);
+  const Eigen::SparseMatrix<double> marginal_information_matrix =
+      ComputeMarginalInformationMatrix(
+          information_matrix, marginalized_block_index, block_size);
+  // (3) Compute marginal covariance local to the elimination clique
+  std::vector<Vertex<LocalizedRangeScan> *> elimination_clique =
+      vertex_to_marginalize->GetAdjacentVertices();
+  std::vector<Eigen::Index> elimination_clique_indices;  // need all indices
+  elimination_clique_indices.reserve(elimination_clique.size() * block_size);
+  for (Vertex<LocalizedRangeScan> * vertex : elimination_clique) {
+    Eigen::Index block_index = block_index_of(vertex);
+    if (block_index > marginalized_block_index) {
+      block_index -= block_size;
+    }
+    for (Eigen::Index offset = 0; offset < block_size; ++offset) {
+      elimination_clique_indices.push_back(block_index + offset);
+    }
+  }
+  const Eigen::SparseMatrix<double> local_marginal_covariance_matrix =
+      ComputeSparseInverse(ArrangeView(marginal_information_matrix,
+                                       elimination_clique_indices,
+                                       elimination_clique_indices).eval());
+  // (4) Remove vertex being marginalized
+  RemoveNodeFromGraph(vertex_to_marginalize);
+  // (5) Remove edges in the subgraph induced by the elimination clique
+  for (Vertex<LocalizedRangeScan> * vertex : elimination_clique) {
+    for (Edge<LocalizedRangeScan> * edge : vertex->GetEdges()) {
+      Vertex<LocalizedRangeScan> * other_vertex =
+          edge->GetSource() == vertex ?
+          edge->GetTarget() : edge->GetSource();
+      const auto it = std::find(
+          elimination_clique.begin(),
+          elimination_clique.end(),
+          other_vertex);
+      if (it != elimination_clique.end()) {
+        RemoveEdgeFromGraph(edge);
+      }
+    }
+  }
+  // (6) Compute Chow-Liu tree approximation to the elimination clique
+  std::vector<Edge<LocalizedRangeScan> *> chow_liu_tree_approximation =
+      ComputeChowLiuTreeApproximation(elimination_clique,
+                                      local_marginal_covariance_matrix);
+  // (7) Push tree edges to graph and solver (as constraints)
+  for (Edge<LocalizedRangeScan> * edge : chow_liu_tree_approximation) {
+    assert(m_pGraph->AddEdge(edge));
+    m_pScanOptimizer->AddConstraint(edge);
+  }
+  return true;
+}
+
+kt_bool Mapper::RemoveEdgeFromGraph(Edge<LocalizedRangeScan> * edge_to_remove)
+{
+  Vertex<LocalizedRangeScan> * source = edge_to_remove->GetSource();
+  Vertex<LocalizedRangeScan> * target = edge_to_remove->GetTarget();
+  source->RemoveEdge(edge_to_remove);
+  target->RemoveEdge(edge_to_remove);
+  m_pScanOptimizer->RemoveConstraint(
+      source->GetObject()->GetUniqueId(),
+      target->GetObject()->GetUniqueId());
+  m_pGraph->RemoveEdge(edge_to_remove);
+  delete edge_to_remove;
+  return true;
+}
+
 kt_bool Mapper::RemoveNodeFromGraph(Vertex<LocalizedRangeScan> * vertex_to_remove)
 {
   // 1) delete edges in adjacent vertices, graph, and optimizer
-  std::vector<Vertex<LocalizedRangeScan> *> adjVerts =
-    vertex_to_remove->GetAdjacentVertices();
-  for (int i = 0; i != adjVerts.size(); i++) {
-    std::vector<Edge<LocalizedRangeScan> *> adjEdges = adjVerts[i]->GetEdges();
+  std::vector<Vertex<LocalizedRangeScan> *> vertices =
+      vertex_to_remove->GetAdjacentVertices();
+  for (Vertex<LocalizedRangeScan> * vertex : vertices) {
     bool found = false;
-    for (int j = 0; j != adjEdges.size(); j++) {
-      if (adjEdges[j]->GetTarget() == vertex_to_remove ||
-        adjEdges[j]->GetSource() == vertex_to_remove)
+    for (Edge<LocalizedRangeScan> * edge : vertex->GetEdges()) {
+      if (edge->GetTarget() == vertex_to_remove ||
+          edge->GetSource() == vertex_to_remove)
       {
-        adjVerts[i]->RemoveEdge(j);
+        vertex->RemoveEdge(edge);
         m_pScanOptimizer->RemoveConstraint(
-          adjEdges[j]->GetSource()->GetObject()->GetUniqueId(),
-          adjEdges[j]->GetTarget()->GetObject()->GetUniqueId());
-        std::vector<Edge<LocalizedRangeScan> *> edges = m_pGraph->GetEdges();
-        std::vector<Edge<LocalizedRangeScan> *>::iterator edgeGraphIt =
-          std::find(edges.begin(), edges.end(), adjEdges[j]);
-
-        if (edgeGraphIt == edges.end()) {
-          std::cout << "Edge not found in graph to remove!" << std::endl;
-          continue;
-        }
-
-        int posEdge = edgeGraphIt - edges.begin();
-        m_pGraph->RemoveEdge(posEdge);   // remove from graph
-        delete *edgeGraphIt;   // free hat!
-        *edgeGraphIt = NULL;
+          edge->GetSource()->GetObject()->GetUniqueId(),
+          edge->GetTarget()->GetObject()->GetUniqueId());
+        m_pGraph->RemoveEdge(edge);
+        delete edge;
         found = true;
       }
     }

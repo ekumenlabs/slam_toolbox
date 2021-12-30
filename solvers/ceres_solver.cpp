@@ -231,7 +231,7 @@ Eigen::SparseMatrix<double> CeresSolver::GetInformationMatrix(
     Eigen::Index index = 0u;
     std::vector<double*> parameter_blocks;
     problem_->GetParameterBlocks(&parameter_blocks);
-    for (auto block : parameter_blocks) {
+    for (auto * block : parameter_blocks) {
       (*ordering)[(*nodes_inverted_)[block]] = index++;
     }
   }
@@ -341,17 +341,9 @@ void CeresSolver::AddConstraint(karto::Edge<karto::LocalizedRangeScan> * pEdge)
   // extract transformation
   karto::LinkInfo * pLinkInfo = (karto::LinkInfo *)(pEdge->GetLabel());
   karto::Pose2 diff = pLinkInfo->GetPoseDifference();
-
-  karto::Matrix3 precisionMatrix = pLinkInfo->GetCovariance().Inverse();
-  Eigen::Matrix3d sqrt_information;  // missing decomposition?
-  sqrt_information(0, 0) = precisionMatrix(0, 0);
-  sqrt_information(0, 1) = sqrt_information(1, 0) = precisionMatrix(0, 1);
-  sqrt_information(0, 2) = sqrt_information(2, 0) = precisionMatrix(0, 2);
-  sqrt_information(1, 1) = precisionMatrix(1, 1);
-  sqrt_information(1, 2) = sqrt_information(2, 1) = precisionMatrix(1, 2);
-  sqrt_information(2, 2) = precisionMatrix(2, 2);
-
   // populate residual and parameterization for heading normalization
+  Eigen::Matrix3d sqrt_information =
+      pLinkInfo->GetCovariance().Inverse().ToEigen().llt().matrixL();
   ceres::CostFunction * cost_function = PoseGraph2dErrorTerm::Create(
       diff.GetX(), diff.GetY(), diff.GetHeading(), sqrt_information);
   ceres::ResidualBlockId block = problem_->AddResidualBlock(

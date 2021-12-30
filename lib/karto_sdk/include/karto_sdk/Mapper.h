@@ -144,18 +144,30 @@ public:
 class LinkInfo : public EdgeLabel
 {
 public:
+  LinkInfo()
+  {
+  }
+
   /**
    * Constructs a link between the given poses
    * @param rPose1
    * @param rPose2
    * @param rCovariance
    */
-  LinkInfo()
-  {
-  }
   LinkInfo(const Pose2 & rPose1, const Pose2 & rPose2, const Matrix3 & rCovariance)
   {
     Update(rPose1, rPose2, rCovariance);
+  }
+
+  LinkInfo(
+      const Pose2 & rPose1,
+      const Pose2 & rPose2,
+      const Pose2 & rPoseDifference,
+      const Matrix3 & rCovariance)
+    : m_Pose1(rPose1), m_Pose2(rPose2),
+      m_PoseDifference(rPoseDifference),
+      m_Covariance(rCovariance)
+  {
   }
 
   /**
@@ -295,6 +307,18 @@ public:
   {
     m_Edges[idx] = NULL;
     m_Edges.erase(m_Edges.begin() + idx);
+  }
+
+  /**
+   * Removes an edge
+   */
+  inline void RemoveEdge(Edge<T> * pEdge)
+  {
+    auto it = std::find(m_Edges.begin(), m_Edges.end(), pEdge);
+    if (it == m_Edges.end()) {
+      std::cout << "Edge not found!" << std::endl;
+    }
+    RemoveEdge(std::distance(m_Edges.begin(), it));
   }
 
   /**
@@ -630,6 +654,18 @@ public:
     m_Edges.erase(m_Edges.begin() + idx);
   }
 
+  /**
+   * Removes an edge of the graph
+   * @param pEdge
+   */
+  inline void RemoveEdge(Edge<T>* pEdge)
+  {
+    auto it = std::find(m_Edges.begin(), m_Edges.end(), pEdge);
+    if (it == m_Edges.end()) {
+      std::cout << "Edge not found!" << std::endl;
+    }
+    RemoveEdge(std::distance(m_Edges.begin(), it));
+  }
 
   /**
    * Deletes the graph data
@@ -743,6 +779,8 @@ public:
     LocalizedRangeScan * pSourceScan,
     LocalizedRangeScan * pTargetScan,
     kt_bool & rIsNewEdge);
+
+  kt_bool AddEdge(Edge<LocalizedRangeScan> * edge);
 
   /**
    * Link scan to last scan and nearby chains of scans
@@ -2016,6 +2054,7 @@ public:
   kt_bool ProcessAgainstNodesNearBy(LocalizedRangeScan * pScan, kt_bool addScanToLocalizationBuffer = false);
   kt_bool ProcessLocalization(LocalizedRangeScan * pScan);
   kt_bool RemoveNodeFromGraph(Vertex<LocalizedRangeScan> *);
+  kt_bool MarginalizeNodeFromGraph(Vertex<LocalizedRangeScan> *);
   void AddScanToLocalizationBuffer(LocalizedRangeScan * pScan, Vertex<LocalizedRangeScan> * scan_vertex);
   void ClearLocalizationBuffer();
 
@@ -2104,6 +2143,8 @@ protected:
    * the scan is the first scan to be added
    */
   kt_bool HasMovedEnough(LocalizedRangeScan * pScan, LocalizedRangeScan * pLastScan) const;
+
+  kt_bool RemoveEdgeFromGraph(Edge<LocalizedRangeScan> *);
 
 public:
   /////////////////////////////////////////////
