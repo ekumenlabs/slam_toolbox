@@ -13,8 +13,8 @@ InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double res
     
     m_curr_mut_info = 0.0;
 
-    utils::grid_operations::initializeGrid<kt_double>(m_mutual_grid, m_num_cells, m_num_cells);
-    utils::grid_operations::initializeGrid<bool>(m_visited_grid, m_num_cells, m_num_cells);
+    m_mutual_grid.resize(m_num_cells, m_num_cells);
+    m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
 InformationEstimates::InformationEstimates()
@@ -29,10 +29,8 @@ InformationEstimates::InformationEstimates()
 
     m_curr_mut_info = 0.0;
 
-    utils::grid_operations::initializeGrid<kt_double>(m_mutual_grid, m_num_cells, m_num_cells);
-    utils::grid_operations::initializeGrid<bool>(m_visited_grid, m_num_cells, m_num_cells);
-
-    // Eigen::MatrixX mat(m_num_cells, m_num_cells);
+    m_mutual_grid.resize(m_num_cells, m_num_cells);
+    m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
 
@@ -53,7 +51,7 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
         karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
 
         // Set as false the current boolean map
-        utils::grid_operations::clearVisitedCells<bool>(m_visited_grid);
+        utils::grid_operations::clearVisitedCells(m_visited_grid);
 
         for (int i = 0; i < laser_readings.size(); ++i)
         {
@@ -92,10 +90,10 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 };
 
                 // Appending new measurement outcomes for the current cell
-                appendCellProbabilities(probabilities, {cell.GetX(), cell.GetY()});
+                appendCellProbabilities(probabilities, cell);
 
                 // Get all the measurement outcomes for the current cell
-                std::vector<std::vector<kt_double>> cell_prob = retrieveCellProbabilities({cell.GetX(), cell.GetY()});
+                std::vector<std::vector<kt_double>> cell_prob = retrieveCellProbabilities(cell);
 
                 // Compute all the possible combinations for the current cell - algorithm 1
                 std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
@@ -107,7 +105,7 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 }
 
                 // Mutual information of cell x, y given a set of measurements                
-                updateCellMutualInformation(1.0 - cell_mutual_inf, {cell.GetX(), cell.GetY()});
+                updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
             }
         }
 
@@ -128,29 +126,29 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
     }
 
     // Clearing the cells for the next time it is called
-    utils::grid_operations::clearVisitedCells<kt_double>(m_mutual_grid);
+    utils::grid_operations::clearVisitedCells(m_mutual_grid);
 
     return std::make_tuple(min_idx, mut_info);
 }
 
-void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, std::vector<int> cell)
+void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell)
 {
     /*
         To append a new measurement for a specific cell
     */
     std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
 
-    it_cell = m_cell_probabilities.find({cell[0], cell[1]});
+    it_cell = m_cell_probabilities.find({cell.GetX(), cell.GetY()});
     if (it_cell == m_cell_probabilities.end())
     {
         // Cell is not present in the map, so append it
         m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<kt_double>>>(
-            {cell[0], cell[1]}, {{measurements[0], measurements[1], measurements[2]}}));
-        m_visited_grid[cell[0]][cell[1]] = true;
+            {cell.GetX(), cell.GetY()}, {{measurements[0], measurements[1], measurements[2]}}));
+        m_visited_grid(cell.GetX(), cell.GetY()) = 1;
     }
     else
     {
-        if(m_visited_grid[cell[0]][cell[1]] == true)
+        if(m_visited_grid(cell.GetX(), cell.GetY()) == 1)
         {
             // Compare the unknown probability, the smallest it is the most information we will have
             // from the occupied or free state
@@ -167,7 +165,7 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
         {
             // Cell is already in the map, only add the next measurement outcome
             it_cell->second.push_back({measurements[0], measurements[1], measurements[2]});
-            m_visited_grid[cell[0]][cell[1]] = true;
+            m_visited_grid(cell.GetX(), cell.GetY()) = 1;
         }
     }
 }
@@ -187,14 +185,7 @@ kt_double InformationEstimates::calculateMapMutualInformation()
         To calculate map mutual information, this is the summation
         of all cells mutual information
     */
-    kt_double sum = 0.0f;
-    for (auto & rows : m_mutual_grid)
-    {
-        for (auto & column : rows)
-        {
-            sum += column;
-        }
-    }
+    kt_double sum = m_mutual_grid.sum();
     return sum;
 }
 
@@ -340,13 +331,13 @@ kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double ra
     return m_obs_nu * (exp(-m_obs_lambda*range_1) - exp(-m_obs_lambda*range_2));
 }
 
-std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilities(std::vector<int> cell)
+std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilities(karto::Vector2<int> const & cell)
 {
     /*
         To get all the cell probabilities
     */
     std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cells;
-    it_cells = m_cell_probabilities.find({cell[0], cell[1]});
+    it_cells = m_cell_probabilities.find({cell.GetX(), cell.GetY()});
 
     return it_cells->second; 
 }
@@ -356,11 +347,11 @@ kt_double InformationEstimates::calculateLaserMutualInformation(kt_double const 
     return map_info - curr_info;
 }
 
-void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, std::vector<int> cell)
+void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell)
 {
     /*
         To update the mutual information for each individual cell
         This is the result of the summation of 3.12
     */
-    m_mutual_grid[cell[0]][cell[1]] = mut_inf;
+    m_mutual_grid(cell.GetX(), cell.GetY()) = mut_inf;
 }

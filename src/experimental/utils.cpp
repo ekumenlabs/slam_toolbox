@@ -65,6 +65,28 @@ namespace utils
             return 0;
         }
 
+        void clearVisitedCells(Eigen::MatrixXd & grid)
+        {
+            for (int i = 0; i < grid.rows(); ++i)
+            {
+                for (int j = 0; j < grid.cols(); ++j)
+                {
+                    grid(i, j) = 0.0;
+                }
+            }
+        }
+        
+        void clearVisitedCells(Eigen::MatrixXi & grid)
+        {
+            for (int i = 0; i < grid.rows(); ++i)
+            {
+                for (int j = 0; j < grid.cols(); ++j)
+                {
+                    grid(i, j) = 0;
+                }
+            }
+        }
+
         std::vector<karto::Vector2<int>> rayCasting(
             karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt)
         {

@@ -9,6 +9,7 @@
 #include <map>
 #include <unordered_map>
 #include "lib/karto_sdk/include/karto_sdk/Karto.h"
+#include "Eigen/Core"
 
 namespace utils
 {
@@ -30,36 +31,8 @@ namespace utils
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
             kt_double limit_x, kt_double limit_y, kt_double resolution);
 
-
-        template<typename T>
-        void clearVisitedCells(std::vector<std::vector<T>> & grid)
-        {
-            for (int i = 0; i < grid.size(); ++i)
-            {
-                for (int j = 0; j < grid[0].size(); ++j)
-                {
-                    grid[i][j] = static_cast<T>(0);
-                }
-            }
-        }
-
-        template<typename T>
-        void initializeGrid(std::vector<std::vector<T>> & grid, int num_rows, int num_columns)
-        {
-            /*
-                To create the grid
-            */
-            grid.resize(num_rows);
-            for (int i = 0; i < num_rows; ++i)
-            {
-                // Adding columns
-                grid[i].resize(num_columns);
-                for (int j = 0; j < num_columns; ++j)
-                {
-                    grid[i][j] = static_cast<T>(0);
-                }
-            }
-        }
+        void clearVisitedCells(Eigen::MatrixXd & grid);
+        void clearVisitedCells(Eigen::MatrixXi & grid);
     } // namespace grid_operations
 
     namespace tuple_hash
