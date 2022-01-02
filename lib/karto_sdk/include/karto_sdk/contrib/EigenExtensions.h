@@ -1,5 +1,5 @@
-#ifndef KARTO_SDK__UTILS_H_
-#define KARTO_SDK__UTILS_H_
+#ifndef KARTO_SDK__EIGENEXTENSIONS_H_
+#define KARTO_SDK__EIGENEXTENSIONS_H_
 
 #include <Eigen/Core>
 #include <Eigen/Sparse>
@@ -9,6 +9,7 @@ namespace Eigen {
 
 namespace internal {
 
+// Returns (a + b) or Dynamic if either operand is.
 template<typename A, typename B>
 inline constexpr int size_sum_prefer_dynamic(A a, B b) {
   static_assert(
@@ -21,6 +22,7 @@ inline constexpr int size_sum_prefer_dynamic(A a, B b) {
   return (int) a + (int) b;
 }
 
+// Returns max(a, b) or Dynamic if either operand is.
 template<typename A, typename B>
 inline constexpr int max_size_prefer_dynamic(A a, B b) {
   static_assert(
@@ -38,41 +40,50 @@ struct constexpr_conditional_impl;
 
 template<typename ThenT, typename ElseT>
 struct constexpr_conditional_impl<true, ThenT, ElseT> {
-  constexpr_conditional_impl(ThenT& some_value, ElseT&)
+  constexpr_conditional_impl(ThenT&& some_value, ElseT&&)
     : value(some_value)
   {
   }
 
-  ThenT& value;
+  ThenT value;
 };
 
 template<typename ThenT, typename ElseT>
 struct constexpr_conditional_impl<false, ThenT, ElseT> {
-  constexpr_conditional_impl(ThenT&, ElseT& other_value)
+  constexpr_conditional_impl(ThenT&&, ElseT&& other_value)
     : value(other_value)
   {
   }
 
-  ElseT& value;
+  ElseT value;
 };
 
+// Returns `some_value` if `Condition`, else `other_value`.
+//
+// Compile-time if-then-else expression where `some_value`
+// and `other_value` types need not match.
 template<bool Condition, typename ThenT, typename ElseT>
-inline auto constexpr_conditional(ThenT& some_value, ElseT& other_value)
+inline constexpr auto
+constexpr_conditional(ThenT&& some_value, ElseT&& other_value)
 {
-  using T = constexpr_conditional_impl<Condition, ThenT, ElseT>;
-  return T{some_value, other_value}.value;
+  return constexpr_conditional_impl<Condition, ThenT, ElseT>{
+    std::forward<ThenT>(some_value),
+    std::forward<ElseT>(other_value)}.value;
 }
 
 }  // namespace internal
 
+// Forward declaration.
 template<typename LhsType, typename RhsType>
 class HorizontalStack;
 
+// Forward declaration.
 template<typename LhsType, typename RhsType>
 class VerticalStack;
 
+// Forward declaration.
 template<typename XprType, typename RowIndices, typename ColIndices>
-class View;  // a *much* simplified equivalent to IndexedView in Eigen 3.4
+class View;
 
 namespace internal {
 
@@ -177,6 +188,12 @@ struct traits<View<XprType, RowIndices, ColIndices>> : traits<XprType>
 
 }  // namespace internal
 
+/**
+ * Expression of a column by column concatenation (i.e. horizontal stacking)
+ * of two matrix (or array) expressions.
+ *
+ * Only sparse expressions are supported.
+ */
 template<typename LhsType, typename RhsType>
 class HorizontalStack : public internal::generic_xpr_base<
   HorizontalStack<LhsType, RhsType>>::type, internal::no_assignment_operator
@@ -230,6 +247,13 @@ class HorizontalStack : public internal::generic_xpr_base<
   RhsTypeNested m_rhs;
 };
 
+
+/**
+ * Expression of a row by row concatenation (i.e. vertical stacking)
+ * of two matrix (or array) expressions.
+ *
+ * Only sparse expressions are supported.
+ */
 template<typename LhsType, typename RhsType>
 class VerticalStack : public internal::generic_xpr_base<
   VerticalStack<LhsType, RhsType>>::type, internal::no_assignment_operator
@@ -283,6 +307,13 @@ class VerticalStack : public internal::generic_xpr_base<
   RhsTypeNested m_rhs;
 };
 
+/**
+ * Expression of a non-sequential sub-matrix defined by arbitrary sequences
+ * of row and column indices.
+ *
+ * Only sparse expressions are supported.
+ */
+// NOTE(hidmic): this a *much* simplified equivalent to IndexedView in Eigen 3.4
 template<typename XprType, typename RowIndices, typename ColIndices>
 class View : public internal::generic_xpr_base<
   View<XprType, RowIndices, ColIndices>>::type, internal::no_assignment_operator
@@ -596,6 +627,15 @@ protected:
 }  // namespace internal
 }  // namespace Eigen
 
+namespace karto
+{
+namespace contrib
+{
+
+/**
+ * Stacks two matrix expressions horizontally
+ * i.e. from left to right, column by column.
+ */
 template <typename LhsType, typename RhsType>
 Eigen::HorizontalStack<LhsType, RhsType>
 StackHorizontally(const LhsType& lhs, const RhsType& rhs)
@@ -603,6 +643,10 @@ StackHorizontally(const LhsType& lhs, const RhsType& rhs)
   return Eigen::HorizontalStack<LhsType, RhsType>(lhs, rhs);
 }
 
+/**
+ * Stacks two matrix expressions vertically
+ * i.e. from left to right, row by row.
+ */
 template <typename LhsType, typename RhsType>
 Eigen::VerticalStack<LhsType, RhsType>
 StackVertically(const LhsType& lhs, const RhsType& rhs)
@@ -610,6 +654,10 @@ StackVertically(const LhsType& lhs, const RhsType& rhs)
   return Eigen::VerticalStack<LhsType, RhsType>(lhs, rhs);
 }
 
+/**
+ * Arranges a view of a matrix expression defined by
+ * arbitrary sequences of row and column indices.
+ */
 template<typename XprType, typename RowIndices, typename ColIndices>
 Eigen::View<XprType, RowIndices, ColIndices>
 ArrangeView(XprType & xpr, const RowIndices & rowIndices, const ColIndices & colIndices)
@@ -617,6 +665,7 @@ ArrangeView(XprType & xpr, const RowIndices & rowIndices, const ColIndices & col
   return Eigen::View<XprType, RowIndices, ColIndices>(xpr, rowIndices, colIndices);
 }
 
+/** Computes the inverse of a sparse matrix. */
 template <typename Scalar, int Options, typename StorageIndex,
           typename SolverType = Eigen::SparseLU<
             Eigen::SparseMatrix<Scalar, Options, StorageIndex>>>
@@ -634,4 +683,7 @@ ComputeSparseInverse(const Eigen::SparseMatrix<Scalar, Options, StorageIndex>& m
   return solver.solve(I);
 }
 
-#endif // KARTO_SDK__UTILS_H_
+}  // namespace contrib
+}  // namespace karto
+
+#endif // KARTO_SDK__EIGENEXTENSIONS_H_

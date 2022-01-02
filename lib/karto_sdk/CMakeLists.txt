@@ -28,7 +28,7 @@ include_directories(include ${catkin_INCLUDE_DIRS}
 add_definitions(${EIGEN3_DEFINITIONS})
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS} ${TBB_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
-add_library(kartoSlamToolbox SHARED src/Karto.cpp src/Mapper.cpp)
+add_library(kartoSlamToolbox SHARED src/Karto.cpp src/Mapper.cpp src/contrib/ChowLiuTreeApprox.cpp)
 ament_target_dependencies(kartoSlamToolbox ${dependencies})
 target_link_libraries(kartoSlamToolbox ${Boost_LIBRARIES} ${TBB_LIBRARIES})
 
