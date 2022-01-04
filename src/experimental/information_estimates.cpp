@@ -1,6 +1,8 @@
 #include <math.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
+#include <iostream>
+
 InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu)
 {
     m_max_sensor_range = sensor_range;
@@ -33,20 +35,27 @@ InformationEstimates::InformationEstimates()
     m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
-
-std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std::vector<karto::LocalizedRangeScan> const& range_scans)
+std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
+    /**
+     * Find and return the laser scan of a set of LocalizedRangeScan with the minimal mutual information
+     * Arguments:
+        * range_scans [std::vector<karto::LocalizedRangeScan*>]: Vector of LocalizedRangeScan pointers
+     * Return:
+        * std::tuple<int, kt_double>: Tuple containing the index of the LozalizedRangeScan and its corresponding mutual information
+    */
     int min_idx = 0;
     int curr_idx = 0;
     m_curr_mut_info = 0.0;
 
     // Initial guess of mutual information
-    kt_double mut_info = 1000.0;
+    kt_double mut_info = 100000.0;
 
     for (auto & scan : range_scans)
     {
-        karto::Pose2 robot_pose = scan.GetOdometricPose();
-        karto::PointVectorDouble laser_readings = scan.GetPointReadings(true);
+        karto::Pose2 robot_pose = scan->GetOdometricPose();
+        karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
+        std::cout << laser_readings.size() << std::endl;
 
         karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
 
@@ -110,6 +119,7 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
         }
 
         kt_double map_mut_info = calculateMapMutualInformation(); 
+        std::cout << map_mut_info << std::endl;
         
         // Extract the mutual information provided by this laser scan
         kt_double laser_mut_info = calculateLaserMutualInformation(map_mut_info, m_curr_mut_info);
@@ -133,8 +143,13 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
 
 void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell)
 {
-    /*
-        To append a new measurement for a specific cell
+    /**
+     * Append measured porbabilities for the given cell
+     * Arguments:
+        * measurements [std::vector<kt_double>]: Vector of LocalizedRangeScan pointers
+        * cell [karto::Vector2<int>]: Cell for appending the data
+     * Return:
+        * Void
     */
     std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
 
@@ -172,18 +187,24 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
 
 kt_double InformationEstimates::calculateInformationContent(kt_double prob)
 {
-    /*
-        To calculate the information content or self-information
-        based on the proability of being occupied
+    /**
+     * Calculate the information content or self-information based on the probability of cell being occupied
+     * Arguments:
+        * prob [kt_double]: Probability of being occupied
+     * Return:
+        * kt_double: Information content
     */
     return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
 }
 
 kt_double InformationEstimates::calculateMapMutualInformation()
 {
-    /*
-        To calculate map mutual information, this is the summation
-        of all cells mutual information
+    /**
+     * Calculate the mutual information of the current map, this is the summation of all cells mutual information
+     * Arguments:
+        * Void
+     * Return:
+        * kt_double: Map mutual information
     */
     kt_double sum = m_mutual_grid.sum();
     return sum;
@@ -191,17 +212,25 @@ kt_double InformationEstimates::calculateMapMutualInformation()
 
 kt_double InformationEstimates::calculateProbabilityFromLogOdds(kt_double log)
 {
-    /*
-        To transform the Log-odds into probability
-        This should be a free function
+    /**
+     * Map Log-Odds into probability
+     * Arguments:
+        * log [kt_double]: Log-Odds
+     * Return:
+        * kt_double: Probability
     */
     return (exp(log) / (1 + exp(log)));
 }
 
 std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm)
 {
-    /*
-        To compute all the possible combinations of a grid cell, given a set of measurement outcomes
+    /**
+     * Implementation of algorithm 1
+     * Compute all the possible combinations of a grid cell, given a set of measurement outcomes
+     * Arguments:
+        * meas_outcm [std::vector<std::vector<kt_double>>]: Vector of measurement outcomes in the form {p_free, p_occ, p_unk}
+     * Return:
+        * std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash::HashTuple>: Map of combination, it contains the combination and its probability
     */
     std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> temp_map;
 
@@ -306,11 +335,15 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash
 
 kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_outcome)
 {
-    /*
-        To calculate the measurement outcome entropy (Measurement outcome in the form <fr, oc, un>)
-            - Calculate Log-Odds from initial probability guess
-            - Calculate the probability from those logs
-            - Calculate the entropy with the retrieved probability
+    /**
+     * Calculate the measurement outcome entropy
+        * Calculate Log-Odds from initial probability guess
+        * Calculate the probability from those logs
+        * Calculate the entropy with the retrieved probability
+     * Arguments:
+        * meas_outcome [map_tuple]: Measurement outcome in the form {p_free, p_occ, p_unk}
+     * Return:
+        * kt_double: Measurement outcome entropy
     */
     int num_free, num_occ, num_unk; 
     std::tie(num_free, num_occ, num_unk) = meas_outcome;
@@ -321,10 +354,14 @@ kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_
 
 kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2)
 {
-    /*
-        To calculate the mass probability of a cell being observed by a given measurement
+    /**
+     * Calculate the mass probability of a cell being observed by a given measurement
+     * Arguments:
+        * range_1 [kt_double]: Lower bound
+        * range_2 [kt_double]: Upper bound
+     * Return:
+        * kt_double: Mass probability
     */
-
     range_1 = (range_1 > m_max_sensor_range) ? m_max_sensor_range : range_1;
     range_2 = (range_2 > m_max_sensor_range) ? m_max_sensor_range : range_2;
 
@@ -333,8 +370,12 @@ kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double ra
 
 std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilities(karto::Vector2<int> const & cell)
 {
-    /*
-        To get all the cell probabilities
+    /**
+     * Retrieve the cell probabilities (Measurement outcomes)
+     * Arguments:
+        * cell [karto::Vector2<int>]: Cell coordinates
+     * Return:
+        * std::vector<std::vector<kt_double>>: Vector of cell probabilities in the form {p_free, p_occ, p_unk} (Measurement outcomes)
     */
     std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cells;
     it_cells = m_cell_probabilities.find({cell.GetX(), cell.GetY()});
@@ -344,14 +385,27 @@ std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilit
 
 kt_double InformationEstimates::calculateLaserMutualInformation(kt_double const & map_info, kt_double const & curr_info)
 {
+    /**
+     * Calculate the laser mutual information considering the map mutual information and the current mutual information calculation
+     * Arguments:
+        * map_info [kt_double]: Map mutual information
+        * curr_info [kt_double]: Current mutual information
+     * Return:
+        * kt_double: Laser mutual information
+    */
     return map_info - curr_info;
 }
 
 void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell)
 {
-    /*
-        To update the mutual information for each individual cell
-        This is the result of the summation of 3.12
+    /**
+     * Note: Result of the summation 3.12
+     * Update the mutual information for each individual cell
+     * Arguments:
+        * mut_inf [kt_double]: Cell mutual information
+        * cell [karto::Vector2<int>]: Cell coordinates
+     * Return:
+        * Void
     */
     m_mutual_grid(cell.GetX(), cell.GetY()) = mut_inf;
 }

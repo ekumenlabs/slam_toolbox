@@ -14,7 +14,7 @@ public:
 
 public:
     // Main function
-    std::tuple<int, kt_double> calculateMutualInformation(std::vector<karto::LocalizedRangeScan> const& range_scans);
+    std::tuple<int, kt_double> calculateMutualInformation(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 
 private:
     // Mutual information 
@@ -28,6 +28,7 @@ private:
     void appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell);
     std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm);
     std::vector<std::vector<kt_double>> retrieveCellProbabilities(karto::Vector2<int> const & cell);
+    
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
     kt_double calculateLaserMutualInformation(kt_double const & map_info, kt_double const & curr_info);
@@ -44,12 +45,11 @@ private:
     kt_double m_cell_resol;
     kt_double m_obs_lambda; 
     kt_double m_obs_nu;
-
+    kt_double m_curr_mut_info;
     kt_double m_map_dist;
     int m_num_cells;
 
-    kt_double m_curr_mut_info;
-
+    // Map grids
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
 };
