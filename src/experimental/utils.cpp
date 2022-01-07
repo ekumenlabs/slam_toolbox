@@ -109,7 +109,6 @@ namespace utils
              * Return:
                 * Void
              */
-            for
             for (int i = 0; i < grid.rows(); ++i)
             {
                 for (int j = 0; j < grid.cols(); ++j)
