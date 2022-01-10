@@ -49,14 +49,12 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
     m_curr_mut_info = 0.0;
 
     // Initial guess of mutual information
-    kt_double mut_info = 100000.0;
+    kt_double mut_info = 1000000.0;
 
     for (auto & scan : range_scans)
     {
-        karto::Pose2 robot_pose = scan->GetOdometricPose();
+        karto::Pose2 robot_pose = scan->GetBarycenterPose();
         karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
-        std::cout << laser_readings.size() << std::endl;
-
         karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
 
         // Set as false the current boolean map
@@ -117,18 +115,16 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
             }
         }
-
         kt_double map_mut_info = calculateMapMutualInformation(); 
-        std::cout << map_mut_info << std::endl;
         
         // Extract the mutual information provided by this laser scan
         kt_double laser_mut_info = calculateLaserMutualInformation(map_mut_info, m_curr_mut_info);
         m_curr_mut_info = map_mut_info;
 
         // Compare to assign the minimal value in the index and the mutual information.
-        if (laser_mut_info < mut_info)
+        if ((laser_mut_info < mut_info) && (laser_mut_info != 0.0))
         {
-            // This is the assingation of the result
+            // This is the assignation of the result
             mut_info = laser_mut_info;
             min_idx = curr_idx;
         }

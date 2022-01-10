@@ -48,40 +48,44 @@ TEST(InformationEstimatesTests, MutualInformationTest)
 {
     InformationEstimates inf_estimates;
 
-    karto::LocalizedRangeScan * scan_1 = new karto::LocalizedRangeScan();
-    karto::LocalizedRangeScan * scan_2 = new karto::LocalizedRangeScan();
-
-    karto::Pose2 pose_1 = karto::Pose2(3.5, 4.0, 0.0);
-    karto::Pose2 pose_2 = karto::Pose2(3.5, 5.5, 0.0);
-
-    scan_1->SetBarycenterPose(pose_1);
-    scan_2->SetBarycenterPose(pose_2);
-
+    karto::LocalizedRangeScan * s1 = new karto::LocalizedRangeScan();
+    karto::LocalizedRangeScan * s2 = new karto::LocalizedRangeScan();
+    karto::Pose2 p1 = karto::Pose2(3.5, 4.0, 0.0);
+    karto::Pose2 p2 = karto::Pose2(3.5, 5.5, 0.0);
+    s1->SetBarycenterPose(p1);
+    s2->SetBarycenterPose(p2);
     karto::BoundingBox2 bb1, bb2;
     bb1.SetMinimum(karto::Vector2<kt_double>(2.0, 2.0));
     bb1.SetMaximum(karto::Vector2<kt_double>(5.0, 6.0));
     bb2.SetMinimum(karto::Vector2<kt_double>(2.0, 4.0));
     bb2.SetMaximum(karto::Vector2<kt_double>(5.0, 7.0));
-    
-    scan_1->SetBoundingBox(bb1);
-    scan_2->SetBoundingBox(bb2);
-    karto::PointVectorDouble points;
-    points.push_back(karto::Vector2<double>(3.0, 5.0));
-    points.push_back(karto::Vector2<double>(3.0, 3.1));
-    
-    scan_1->SetPointReadings(points, true);
+    s1->SetBoundingBox(bb1);
+    s2->SetBoundingBox(bb2);
+    karto::PointVectorDouble pts1, pts2;
+    pts1.push_back(karto::Vector2<double>(3.0, 5.0));
+    pts1.push_back(karto::Vector2<double>(3.0, 3.0));
+    pts1.push_back(karto::Vector2<double>(1.5, 7.0));
+    pts2.push_back(karto::Vector2<double>(4.0, 5.0));
+    pts2.push_back(karto::Vector2<double>(4.0, 2.9));
+    s1->SetPointReadings(pts1, true);
+    s2->SetPointReadings(pts2, true);
+    bool dirty = false;
+    s1->SetIsDirty(dirty);
+    s2->SetIsDirty(dirty);
 
-    karto::PointVectorDouble laser_readings = scan_1->GetPointReadings(true);
+    std::vector<karto::LocalizedRangeScan*> range_scan_vct;
+    range_scan_vct.push_back(s1);
+    range_scan_vct.push_back(s2);
 
-    EXPECT_FLOAT_EQ(laser_readings[0].GetX(), 3.0) << "EXPECT FAIL in X coordinate";
-    EXPECT_FLOAT_EQ(laser_readings[0].GetY(), 5.1) << "EXPECT FAIL in Y coordinate";
+    std::tuple<int, kt_double> min_inf = inf_estimates.calculateMutualInformation(range_scan_vct);
 
-    ASSERT_FLOAT_EQ(laser_readings[0].GetX(), 3.0) << "FAIL in X coordinate";
-    ASSERT_FLOAT_EQ(laser_readings[0].GetY(), 5.0) << "FAIL in Y coordinate";
+    // El que contiene menor informacion es s2, index 1
+    int idx;
+    kt_double mut_inf;
+    std::tie(idx, mut_inf) = min_inf;
 
-    // bool dirty = false;
-    // s1->SetIsDirty(dirty);
-    // s2->SetIsDirty(dirty);
+    EXPECT_EQ(idx, 1) << "FAIL in laser index";
+    EXPECT_NE(mut_inf, 0.0) << "FAIL in mutual information equality";
 }
 
 int main(int argc, char ** argv)
@@ -89,9 +93,5 @@ int main(int argc, char ** argv)
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-
-// colcon build --packages-select slam_toolbox  --cmake-args -DBUILD_TESTING=ON
-// colcon test --packages-select slam_toolbox --event-handlers console_direct+
-
 
 #endif // SLAM_TOOLBOX_SLAM_TOOLBOX_INFORMATION_ESTIMATES_TEST_H_
