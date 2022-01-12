@@ -198,41 +198,47 @@ namespace utils
             return karto::Vector2<int>{x_cell, y_cell};
         }
 
-        std::vector<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 
-            karto::Vector2<kt_double> const & laser_end, std::vector<kt_double> cell_start, std::vector<kt_double> cell_end)
+        // std::vector<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 
+        karto::Vector2<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 
+            karto::Vector2<kt_double> const & laser_end, karto::Vector2<kt_double> const & cell_start, karto::Vector2<kt_double> const & cell_end)
         {
             /**
              * Find the intersection point between a cell line and a laser beam
              * Arguments:
                 * laser_start [karto::Vector2<kt_double>]: Laser initial point in x and y
                 * laser_end [karto::Vector2<kt_double>]: Laser final point in x and y
-                * cell_start [std::vector<kt_double>]: Cell initial point in x and y
-                * cell_end [std::vector<kt_double>]: Cell final point in x and y
+                * cell_start [karto::Vector2<kt_double>]: Cell initial point in x and y
+                * cell_end [karto::Vector2<kt_double>]: Cell final point in x and y
              * Return:
-                * std::vector<kt_double>: Intersection point
+                * karto::Vector2<kt_double>: Intersection point
              */
             kt_double x1 = laser_start.GetX();
             kt_double x2 = laser_end.GetX();
-            kt_double x3 = cell_start[0];
-            kt_double x4 = cell_end[0];
+            kt_double x3 = cell_start.GetX();
+            kt_double x4 = cell_end.GetX();
 
             kt_double y1 = laser_start.GetY();
             kt_double y2 = laser_end.GetY();
-            kt_double y3 = cell_start[1];
-            kt_double y4 = cell_end[1];
+            kt_double y3 = cell_start.GetY();
+            kt_double y4 = cell_end.GetY();
 
             kt_double den = ((x2 - x1)*(y4 - y3) - (x4 - x3)*(y2 - y1));
+
+            karto::Vector2<kt_double> intersection;
             if (den == 0.0f)
             {
                 // Parallel lines
-                return {};
+                intersection.SetX(0.0);
+                intersection.SetY(0.0);
             }
             else
             {
                 kt_double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2 - x1)) / den;
                 kt_double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2 - y1)) / den;
-                return {x, y};
+                intersection.SetX(x);
+                intersection.SetY(y);
             }
+            return intersection;
         }
 
         std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
@@ -272,24 +278,26 @@ namespace utils
 
             for (int k = 0; k < 4; ++k)
             {
-                std::vector<kt_double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, {initial_x[k], initial_y[k]}, {final_x[k], final_y[k]});
-                if(intersection.size() != 0)
+                karto::Vector2<kt_double> start{initial_x[k], initial_y[k]};
+                karto::Vector2<kt_double> end{final_x[k], final_y[k]};
+                karto::Vector2<kt_double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, start, end);
+                if(intersection.Length() != 0)
                 {
-                    if ((fabs(intersection[0]) >= (fabs(cell_limits[0]) - 0.001)) &&
-                    (fabs(intersection[0]) <= (fabs(cell_limits[1]) + 0.001)) &&
-                    (fabs(intersection[1]) >= (fabs(cell_limits[2]) - 0.001)) &&
-                    (fabs(intersection[1]) <= (fabs(cell_limits[3]) + 0.001)))
+                    if ((fabs(intersection.GetX()) >= (fabs(cell_limits[0]) - 0.001)) &&
+                    (fabs(intersection.GetX()) <= (fabs(cell_limits[1]) + 0.001)) &&
+                    (fabs(intersection.GetY()) >= (fabs(cell_limits[2]) - 0.001)) &&
+                    (fabs(intersection.GetY()) <= (fabs(cell_limits[3]) + 0.001)))
                     {
                         // Two points where the beam cuts the cell
                         //  - A laser beam can cut the cell at least 1 time (Enter)
                         //  - A laser beam can cut the cell at most 2 times (Enter an exit)
-                        inter_x.push_back(intersection[0]);
-                        inter_y.push_back(intersection[1]);
+                        inter_x.push_back(intersection.GetX());
+                        inter_y.push_back(intersection.GetY());
                     }
                 }
             }
             return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y}; 
         }
 
-    }// namespace grid_operations
+    } // namespace grid_operations
 } // namespace utils

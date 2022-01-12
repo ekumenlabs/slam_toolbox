@@ -35,6 +35,7 @@ InformationEstimates::InformationEstimates()
     m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
+// FindMinorInformativeLaser
 std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
     /**
@@ -53,7 +54,7 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
 
     for (auto & scan : range_scans)
     {
-        karto::Pose2 robot_pose = scan->GetBarycenterPose();
+        karto::Pose2 robot_pose = scan->GetCorrectedPose();
         karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
         karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
 
@@ -74,7 +75,8 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 kt_double limit_x = cell.GetX() * m_cell_resol;
                 kt_double limit_y = cell.GetY() * m_cell_resol;
 
-                std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
+                std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(
+                    robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
 
                 if (intersections.first.size() == 0)
                     continue;
@@ -115,7 +117,11 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
             }
         }
-        kt_double map_mut_info = calculateMapMutualInformation(); 
+
+        // I can get here the current laser mutual information. 
+        // At this point I have processed a single LaserRange.
+
+        kt_double map_mut_info = calculateMapMutualInformation(); // I(M, Z)
         
         // Extract the mutual information provided by this laser scan
         kt_double laser_mut_info = calculateLaserMutualInformation(map_mut_info, m_curr_mut_info);
@@ -131,8 +137,15 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
         ++curr_idx;
     }
 
+    // IIUC information gain for a measurement Z[0] is I(M, Z) - I(M, Z \ {Z[0]}).
+    // I would need the whole mutual information calculation - Which means at the end of the loop
+
+    // kt_double map_mut_info = calculateMapMutualInformation(); // I(M, Z)
+
     // Clearing the cells for the next time it is called
     utils::grid_operations::clearVisitedCells(m_mutual_grid);
+
+    std::cout << mut_info << std::endl;
 
     return std::make_tuple(min_idx, mut_info);
 }
