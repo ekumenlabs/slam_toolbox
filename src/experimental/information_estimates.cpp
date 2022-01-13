@@ -1,8 +1,6 @@
 #include <math.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
-#include <iostream>
-
 InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu)
 {
     m_max_sensor_range = sensor_range;
@@ -13,8 +11,7 @@ InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double res
     m_map_dist = 200.0f; 
     m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
     
-    m_curr_mut_info = 0.0;
-
+    m_info_grid.resize(m_num_cells, m_num_cells);
     m_mutual_grid.resize(m_num_cells, m_num_cells);
     m_visited_grid.resize(m_num_cells, m_num_cells);
 }
@@ -29,28 +26,25 @@ InformationEstimates::InformationEstimates()
     m_map_dist = 200.0f; 
     m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
 
-    m_curr_mut_info = 0.0;
-
+    m_info_grid.resize(m_num_cells, m_num_cells);
     m_mutual_grid.resize(m_num_cells, m_num_cells);
     m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
-// FindMinorInformativeLaser
-std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std::vector<karto::LocalizedRangeScan*> const& range_scans)
+std::tuple<int, kt_double> InformationEstimates::findLessInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
     /**
-     * Find and return the laser scan of a set of LocalizedRangeScan with the minimal mutual information
+     * Find and return the Laser Scan index which provide the less mutual information in a set of Laser Scans
      * Arguments:
         * range_scans [std::vector<karto::LocalizedRangeScan*>]: Vector of LocalizedRangeScan pointers
      * Return:
         * std::tuple<int, kt_double>: Tuple containing the index of the LozalizedRangeScan and its corresponding mutual information
     */
-    int min_idx = 0;
-    int curr_idx = 0;
-    m_curr_mut_info = 0.0;
 
     // Initial guess of mutual information
     kt_double mut_info = 1000000.0;
+    std::vector<kt_double> scans_mut_info;
+    scans_mut_info.reserve(range_scans.size());
 
     for (auto & scan : range_scans)
     {
@@ -114,40 +108,27 @@ std::tuple<int, kt_double> InformationEstimates::calculateMutualInformation(std:
                 }
 
                 // Mutual information of cell x, y given a set of measurements                
-                updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
+                updateCellMutualInformation(1.0 - cell_mutual_inf, cell); 
             }
         }
-
-        // I can get here the current laser mutual information. 
-        // At this point I have processed a single LaserRange.
-
-        kt_double map_mut_info = calculateMapMutualInformation(); // I(M, Z)
+        // Mutual information provided by this laser scan
+        kt_double laser_mut_info = calculateLaserMutualInformation();
+        scans_mut_info.emplace_back(laser_mut_info);
         
-        // Extract the mutual information provided by this laser scan
-        kt_double laser_mut_info = calculateLaserMutualInformation(map_mut_info, m_curr_mut_info);
-        m_curr_mut_info = map_mut_info;
-
-        // Compare to assign the minimal value in the index and the mutual information.
-        if ((laser_mut_info < mut_info) && (laser_mut_info != 0.0))
-        {
-            // This is the assignation of the result
-            mut_info = laser_mut_info;
-            min_idx = curr_idx;
-        }
-        ++curr_idx;
+        utils::grid_operations::clearVisitedCells(m_info_grid);
     }
 
-    // IIUC information gain for a measurement Z[0] is I(M, Z) - I(M, Z \ {Z[0]}).
-    // I would need the whole mutual information calculation - Which means at the end of the loop
-
-    // kt_double map_mut_info = calculateMapMutualInformation(); // I(M, Z)
+    kt_double map_mut_info = calculateMapMutualInformation();
 
     // Clearing the cells for the next time it is called
     utils::grid_operations::clearVisitedCells(m_mutual_grid);
 
-    std::cout << mut_info << std::endl;
+    // Finding the less informative laser scan
+    std::vector<kt_double>::iterator it_min;
+    it_min = std::min_element(scans_mut_info.begin(), scans_mut_info.end());
+    int idx = it_min - scans_mut_info.begin();
 
-    return std::make_tuple(min_idx, mut_info);
+    return std::make_tuple(idx, *it_min);
 }
 
 void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell)
@@ -392,7 +373,8 @@ std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilit
     return it_cells->second; 
 }
 
-kt_double InformationEstimates::calculateLaserMutualInformation(kt_double const & map_info, kt_double const & curr_info)
+// kt_double InformationEstimates::calculateLaserMutualInformation(kt_double const & map_info, kt_double const & curr_info)
+kt_double InformationEstimates::calculateLaserMutualInformation()
 {
     /**
      * Calculate the laser mutual information considering the map mutual information and the current mutual information calculation
@@ -402,7 +384,8 @@ kt_double InformationEstimates::calculateLaserMutualInformation(kt_double const 
      * Return:
         * kt_double: Laser mutual information
     */
-    return map_info - curr_info;
+    // return map_info - curr_info;
+    return m_info_grid.sum();
 }
 
 void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell)
@@ -417,4 +400,5 @@ void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, karto:
         * Void
     */
     m_mutual_grid(cell.GetX(), cell.GetY()) = mut_inf;
+    m_info_grid(cell.GetX(), cell.GetY()) = mut_inf;
 }

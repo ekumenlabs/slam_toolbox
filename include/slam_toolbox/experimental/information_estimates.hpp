@@ -14,7 +14,7 @@ public:
 
 public:
     // Main function
-    std::tuple<int, kt_double> calculateMutualInformation(std::vector<karto::LocalizedRangeScan*> const& range_scans);
+    std::tuple<int, kt_double> findLessInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 
 private:
     // Mutual information 
@@ -31,7 +31,7 @@ private:
     
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
-    kt_double calculateLaserMutualInformation(kt_double const & map_info, kt_double const & curr_info);
+    kt_double calculateLaserMutualInformation();
 
 private:
     // Data structures 
@@ -45,11 +45,11 @@ private:
     kt_double m_cell_resol;
     kt_double m_obs_lambda; 
     kt_double m_obs_nu;
-    kt_double m_curr_mut_info;
     kt_double m_map_dist;
     int m_num_cells;
 
     // Map grids
+    Eigen::MatrixXd m_info_grid;
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
 };
