@@ -5,8 +5,8 @@ namespace utils
 {
     namespace grid_operations
     {
-        void updateCellLimits(std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x, 
-            std::vector<kt_double>& final_y, kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, karto::Vector2<int> const& robot_grid_pos, 
+        void updateCellLimits(std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x,
+            std::vector<kt_double>& final_y, kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, karto::Vector2<int> const& robot_grid_pos,
             karto::Vector2<int> const& final_grid_pos, kt_double resolution)
         {
             /**
@@ -24,7 +24,7 @@ namespace utils
                 * resolution [kt_double]: Cell resolution
              * Return:
                 * Void
-             */            
+             */
             if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() >= robot_grid_pos.GetY())
             {
                 // X greater and Y greater. WRO final points
@@ -76,8 +76,8 @@ namespace utils
                 * num [int]: Number for perform the sign operation
              * Return:
                 * int: Sign
-             */   
-            if (num < 0) return -1; 
+             */
+            if (num < 0) return -1;
             if (num >= 1) return 1;
             return 0;
         }
@@ -99,7 +99,7 @@ namespace utils
                 }
             }
         }
-        
+
         void clearVisitedCells(Eigen::MatrixXi & grid)
         {
             /**
@@ -198,8 +198,7 @@ namespace utils
             return karto::Vector2<int>{x_cell, y_cell};
         }
 
-        // std::vector<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 
-        karto::Vector2<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start, 
+        karto::Vector2<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start,
             karto::Vector2<kt_double> const & laser_end, karto::Vector2<kt_double> const & cell_start, karto::Vector2<kt_double> const & cell_end)
         {
             /**
@@ -242,7 +241,7 @@ namespace utils
         }
 
         std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
-            karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end, 
+            karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end,
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
             kt_double limit_x, kt_double limit_y, kt_double resolution)
         {
@@ -266,7 +265,7 @@ namespace utils
             // Initial points for each of the 4 corners
             std::vector<kt_double> initial_x {limit_x, limit_x, limit_x + resolution, limit_x + resolution};
             std::vector<kt_double> initial_y {limit_y, limit_y, limit_y + resolution, limit_y + resolution};
-            
+
             // Final points for each of the 4 corners
             std::vector<kt_double> final_x {limit_x + resolution, limit_x, limit_x + resolution, limit_x};
             std::vector<kt_double> final_y {limit_y, limit_y + resolution, limit_y, limit_y + resolution};
@@ -296,7 +295,7 @@ namespace utils
                     }
                 }
             }
-            return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y}; 
+            return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y};
         }
 
     } // namespace grid_operations

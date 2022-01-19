@@ -143,7 +143,7 @@ TEST(InformationEstimatesTests, MutualInformationTest)
     range_scan_vct.push_back(s2.get());
     range_scan_vct.push_back(s3.get());
 
-    std::tuple<int, kt_double> min_inf = inf_estimates.findLessInformativeLaser(range_scan_vct);
+    std::tuple<int, kt_double> min_inf = inf_estimates.findLeastInformativeLaser(range_scan_vct);
 
     int idx;
     kt_double mut_inf;
