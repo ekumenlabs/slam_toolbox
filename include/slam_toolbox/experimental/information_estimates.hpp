@@ -19,7 +19,6 @@ public:
 private:
     // Mutual information
     kt_double calculateInformationContent(kt_double prob);
-    kt_double calculateMapMutualInformation();
     kt_double measurementOutcomeEntropy(map_tuple const& meas_outcome);
     kt_double calculateProbabilityFromLogOdds(kt_double log);
     void updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell);
@@ -31,7 +30,6 @@ private:
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
-    kt_double calculateLaserMutualInformation();
 
 private:
     // Data structures
@@ -49,7 +47,6 @@ private:
     int m_num_cells;
 
     // Map grids
-    Eigen::MatrixXd m_info_grid;
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
 };
