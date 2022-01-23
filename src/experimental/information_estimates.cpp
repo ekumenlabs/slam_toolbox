@@ -44,8 +44,50 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
     std::vector<kt_double> scans_mut_info;
     scans_mut_info.reserve(range_scans.size());
 
+    // Total mutual information
+    kt_double map_mut_info = mutualInformationFromScans(range_scans);
+    // Clearing the cells for the next time it is called
+    utils::grid_operations::clearVisitedCells(m_mutual_grid);
+
+    for (int i = 0; i < range_scans.size(); ++i)
+    {
+        // Find mutual information when extracting one laser scan
+        kt_double temp_mut_info = mutualInformationFromScans(range_scans, true, i);
+        scans_mut_info.emplace_back(map_mut_info - temp_mut_info);
+        // Clearing the cells for the next time it is called
+        utils::grid_operations::clearVisitedCells(m_mutual_grid);
+    }
+
+    // Finding the less informative laser scan
+    std::vector<kt_double>::iterator it_min;
+    it_min = std::min_element(scans_mut_info.begin(), scans_mut_info.end());
+    int idx = it_min - scans_mut_info.begin();
+
+    return std::make_tuple(idx, *it_min);
+}
+
+
+kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::LocalizedRangeScan*> const& range_scans, bool ignore_scan, int scan_idx)
+{
+    /**
+     * Append measured porbabilities for the given cell
+     * Arguments:
+        * range_scans [std::vector<karto::LocalizedRangeScan*>]: Vector of LocalizedRangeScan pointers
+        * ignore_scan [bool]: Indicates the type of calculation
+        * scan_idx [int]: Index within the set to be ignored
+     * Return:
+        * kt_double
+    */
+
+    int curr_idx = 0;
     for (auto & scan : range_scans)
     {
+        if (curr_idx == scan_idx && ignore_scan)
+        {
+            ++curr_idx;
+            continue;
+        }
+
         karto::Pose2 robot_pose = scan->GetCorrectedPose();
         karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
         karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
@@ -109,101 +151,11 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
                 updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
             }
         }
+        ++curr_idx;
     }
-    // Total mutual information
-    kt_double map_mut_info = m_mutual_grid.sum();
-
-    // Clearing the cells for the next time it is called
-    utils::grid_operations::clearVisitedCells(m_mutual_grid);
-
-    for (int i = 0; i < range_scans.size(); ++i)
-    {
-        // Inner loop for calculating the mutual information without a given measurement
-        int scan_idx = 0;
-        for (auto & scan : range_scans)
-        {
-            if (scan_idx == i)
-            {
-                ++scan_idx;
-                continue;
-            }
-
-            karto::Pose2 robot_pose = scan->GetCorrectedPose();
-            karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
-            karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
-
-            // Set as false the current boolean map
-            utils::grid_operations::clearVisitedCells(m_visited_grid);
-
-            for (int i = 0; i < laser_readings.size(); ++i)
-            {
-                // Laser final cell
-                karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(laser_readings[i], m_cell_resol);
-
-                // Visited cells by this laser beam
-                std::vector<karto::Vector2<int>> cells = utils::grid_operations::rayCasting(robot_grid, beam_grid);
-
-                for (auto & cell : cells)
-                {
-                    // Inidividual cell limits
-                    kt_double limit_x = cell.GetX() * m_cell_resol;
-                    kt_double limit_y = cell.GetY() * m_cell_resol;
-
-                    std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(
-                        robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
-
-                    if (intersections.first.size() == 0)
-                        continue;
-
-                    // Enter (d1) and Exit (d2) distances
-                    std::vector<kt_double> distances;
-                    for (int k = 0; k < intersections.first.size(); ++k)
-                    {
-                        // From robot position to intersection points
-                        karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
-                        kt_double distance = robot_pose.GetPosition().Distance(intersection);
-                        distances.push_back(distance);
-                    }
-
-                    // Measurement outcomes vector {Pfree, Pocc, Pun}
-                    std::vector<kt_double> probabilities {
-                        calculateScanMassProbabilityBetween(distances[1], m_max_sensor_range),
-                        calculateScanMassProbabilityBetween(distances[0], distances[1]),
-                        calculateScanMassProbabilityBetween(0.0f, distances[0])
-                    };
-
-                    // Appending new measurement outcomes for the current cell
-                    appendCellProbabilities(probabilities, cell);
-
-                    // Get all the measurement outcomes for the current cell
-                    std::vector<std::vector<kt_double>> cell_prob = retrieveCellProbabilities(cell);
-
-                    // Compute all the possible combinations for the current cell - algorithm 1
-                    std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_prob);
-
-                    kt_double cell_mutual_inf = 0.0f;
-                    for (auto& pair : meas_out_prob)
-                    {
-                        cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
-                    }
-
-                    // Mutual information of cell x, y given a set of measurements
-                    updateCellMutualInformation(1.0 - cell_mutual_inf, cell);
-                }
-            }
-            ++scan_idx;
-        }
-        kt_double temp_mut_info = m_mutual_grid.sum();
-        scans_mut_info.emplace_back(map_mut_info - temp_mut_info);
-        utils::grid_operations::clearVisitedCells(m_mutual_grid);
-    }
-    // Finding the less informative laser scan
-    std::vector<kt_double>::iterator it_min;
-    it_min = std::min_element(scans_mut_info.begin(), scans_mut_info.end());
-    int idx = it_min - scans_mut_info.begin();
-
-    return std::make_tuple(idx, *it_min);
+    return m_mutual_grid.sum();
 }
+
 
 void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell)
 {

@@ -21,6 +21,7 @@ private:
     kt_double calculateInformationContent(kt_double prob);
     kt_double measurementOutcomeEntropy(map_tuple const& meas_outcome);
     kt_double calculateProbabilityFromLogOdds(kt_double log);
+    kt_double mutualInformationFromScans(std::vector<karto::LocalizedRangeScan*> const& range_scans, bool ignore_scan=false, int scan_idx=0);
     void updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell);
 
     // Measurement outcomes probabilities
