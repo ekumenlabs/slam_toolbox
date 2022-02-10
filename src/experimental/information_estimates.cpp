@@ -74,7 +74,8 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
     // Total mutual information
     kt_double map_mut_info = mutualInformationFromScans(range_scans);
     // Clearing the cells for the next time it is called
-    utils::grid_operations::clearVisitedCells(m_mutual_grid);
+    m_mutual_grid.setZero();
+
 
     for (int i = 0; i < range_scans.size(); ++i)
     {
@@ -82,7 +83,7 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
         kt_double temp_mut_info = mutualInformationFromScans(range_scans, true, i);
         scans_mut_info.emplace_back(map_mut_info - temp_mut_info);
         // Clearing the cells for the next time it is called
-        utils::grid_operations::clearVisitedCells(m_mutual_grid);
+        m_mutual_grid.setZero();
     }
 
     // Finding the less informative laser scan
@@ -115,17 +116,23 @@ kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::Lo
             continue;
         }
 
-        karto::Pose2 robot_pose = scan->GetCorrectedPose();
+        karto::Pose2 robot_pose_raw = scan->GetCorrectedPose();
+
+        // Moving the pose to our local system
+        karto::Pose2 robot_pose_tf(robot_pose_raw.GetX() - m_low_x, robot_pose_raw.GetY() - m_low_y, robot_pose_raw.GetHeading());
+
         karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
-        karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
+        karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose_tf.GetPosition(), m_cell_resol);
 
         // Set as false the current boolean map
-        utils::grid_operations::clearVisitedCells(m_visited_grid);
+        m_visited_grid.setZero();
 
         for (int i = 0; i < laser_readings.size(); ++i)
         {
+            karto::Vector2<kt_double> tf_laser{laser_readings[i].GetX() - m_low_x, laser_readings[i].GetY() - m_low_y};
+
             // Laser final cell
-            karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(laser_readings[i], m_cell_resol);
+            karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(tf_laser, m_cell_resol);
 
             // Visited cells by this laser beam
             std::vector<karto::Vector2<int>> cells = utils::grid_operations::rayCasting(robot_grid, beam_grid);
@@ -137,7 +144,7 @@ kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::Lo
                 kt_double limit_y = cell.GetY() * m_cell_resol;
 
                 std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(
-                    robot_pose.GetPosition(), laser_readings[i], robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
+                    robot_pose_tf.GetPosition(), tf_laser, robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
 
                 if (intersections.first.size() == 0)
                     continue;
@@ -148,7 +155,7 @@ kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::Lo
                 {
                     // From robot position to intersection points
                     karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
-                    kt_double distance = robot_pose.GetPosition().Distance(intersection);
+                    kt_double distance = robot_pose_tf.GetPosition().Distance(intersection);
                     distances.push_back(distance);
                 }
 

@@ -28,8 +28,6 @@ namespace utils
             karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end,
             karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
             kt_double limit_x, kt_double limit_y, kt_double resolution);
-        void clearVisitedCells(Eigen::MatrixXd & grid);
-        void clearVisitedCells(Eigen::MatrixXi & grid);
     } // namespace grid_operations
 
     namespace tuple_hash

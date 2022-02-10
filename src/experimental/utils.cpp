@@ -82,42 +82,6 @@ namespace utils
             return 0;
         }
 
-        void clearVisitedCells(Eigen::MatrixXd & grid)
-        {
-            /**
-             * Clear the given floating Eigen::Matrix
-             * Arguments:
-                * grid [Eigen::Matrix]: Grid for cleaning
-            * Return:
-                * Void
-             */
-            for (int i = 0; i < grid.rows(); ++i)
-            {
-                for (int j = 0; j < grid.cols(); ++j)
-                {
-                    grid(i, j) = 0.0;
-                }
-            }
-        }
-
-        void clearVisitedCells(Eigen::MatrixXi & grid)
-        {
-            /**
-             * Clear the given integer Eigen::Matrix
-             * Arguments:
-                * grid [Eigen::Matrix]: Grid for cleaning
-             * Return:
-                * Void
-             */
-            for (int i = 0; i < grid.rows(); ++i)
-            {
-                for (int j = 0; j < grid.cols(); ++j)
-                {
-                    grid(i, j) = 0;
-                }
-            }
-        }
-
         std::vector<karto::Vector2<int>> rayCasting(
             karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt)
         {
