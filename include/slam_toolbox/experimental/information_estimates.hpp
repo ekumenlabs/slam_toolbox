@@ -44,8 +44,11 @@ private:
     kt_double m_cell_resol;
     kt_double m_obs_lambda;
     kt_double m_obs_nu;
-    kt_double m_map_dist;
-    int m_num_cells;
+
+    kt_double m_low_x;
+    kt_double m_low_y;
+    kt_double m_high_x;
+    kt_double m_high_y;
 
     // Map grids
     Eigen::MatrixXd m_mutual_grid;

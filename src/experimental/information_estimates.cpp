@@ -9,26 +9,14 @@ InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double res
     m_cell_resol = resolution;
     m_obs_lambda = lambda;
     m_obs_nu = nu;
-
-    m_map_dist = 200.0f;
-    m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
-
-    m_mutual_grid.resize(m_num_cells, m_num_cells);
-    m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
 InformationEstimates::InformationEstimates()
 {
-    m_max_sensor_range = 5.0;
-    m_cell_resol = 0.05;
+    m_max_sensor_range = 25.0;
+    m_cell_resol = 0.1;
     m_obs_lambda = 0.35;
     m_obs_nu = 0.28;
-
-    m_map_dist = 200.0f;
-    m_num_cells = static_cast<int>(m_map_dist / m_cell_resol);
-
-    m_mutual_grid.resize(m_num_cells, m_num_cells);
-    m_visited_grid.resize(m_num_cells, m_num_cells);
 }
 
 std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)
@@ -40,6 +28,45 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
      * Return:
         * std::tuple<int, kt_double>: Tuple containing the index of the LozalizedRangeScan and its corresponding mutual information
     */
+
+    // Get the robot poses for creating our new local coordinate system
+    for (const auto & scan : range_scans)
+    {
+        if (scan == nullptr)
+        {
+            continue;
+        }
+
+        karto::Pose2 pose = scan->GetCorrectedPose();
+
+        // Finding the closest pose
+        m_low_x = pose.GetX() < m_low_x ? pose.GetX() : m_low_x;
+        m_low_y = pose.GetY() < m_low_y ? pose.GetY() : m_low_y;
+
+        // Finding the farthest pose
+        m_high_x = pose.GetX() > m_high_x ? pose.GetX() : m_high_x;
+        m_high_y = pose.GetY() > m_high_y ? pose.GetY() : m_high_y;
+    }
+
+    // Margins for the closest points
+    m_low_x -= m_max_sensor_range;
+    m_low_y -= m_max_sensor_range;
+
+    // Margins for the farthest points
+    m_high_x += m_max_sensor_range;
+    m_high_y += m_max_sensor_range;
+
+    // Map dimensions
+    kt_double dist_x = std::fabs(m_high_x) + std::fabs(m_low_x);
+    kt_double dist_y = std::fabs(m_high_y) + std::fabs(m_low_y);
+
+    // Number of X and Y cells
+    int n_cells_x = static_cast<int>(dist_x / m_cell_resol);
+    int n_cells_y = static_cast<int>(dist_y / m_cell_resol);
+
+    // Resize the grid with new number of cells
+    m_mutual_grid.resize(n_cells_x, n_cells_y);
+    m_visited_grid.resize(n_cells_x, n_cells_y);
 
     std::vector<kt_double> scans_mut_info;
     scans_mut_info.reserve(range_scans.size());
