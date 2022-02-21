@@ -34,11 +34,7 @@ private:
 
 private:
     // Data structures
-    std::map<std::vector<int>, std::vector<std::vector<kt_double>>> m_cell_probabilities;
-
-    const kt_double l_free = log(0.3 / (1.0 - 0.3));
-    const kt_double l_occ = log(0.7 / (1.0 - 0.7));
-    const kt_double l_o = log(0.5 / (1.0 - 0.5));
+    std::map<karto::Vector2<int>, std::vector<std::vector<kt_double>>> m_cell_probabilities;
 
     kt_double m_max_sensor_range;
     kt_double m_cell_resol;

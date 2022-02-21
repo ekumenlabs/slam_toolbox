@@ -30,6 +30,14 @@ namespace utils
             kt_double limit_x, kt_double limit_y, kt_double resolution);
     } // namespace grid_operations
 
+    namespace probability_operations
+    {
+        kt_double calculateMeasurementOutcomeEntropy(std::tuple<int, int, int> const& meas_outcome);
+        kt_double calculateProbabilityFromLogOdds(kt_double log);
+        kt_double calculateInformationContent(kt_double prob);
+
+    } // namespace probability_operations
+
     namespace tuple_hash
     {
         struct HashTuple

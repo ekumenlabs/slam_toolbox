@@ -262,4 +262,57 @@ namespace utils
         }
 
     } // namespace grid_operations
+
+    namespace probability_operations
+    {
+        kt_double calculateInformationContent(kt_double prob)
+        {
+            /**
+             * Calculate the information content or self-information based on the probability of cell being occupied
+             * Arguments:
+                * prob [kt_double]: Probability of being occupied
+            * Return:
+                * kt_double: Information content
+            */
+            return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
+        }
+
+        kt_double calculateMeasurementOutcomeEntropy(std::tuple<int, int, int> const& meas_outcome)
+        {
+            /**
+             * Calculate the measurement outcome entropy
+                * Calculate Log-Odds from initial probability guess
+                * Calculate the probability from those logs
+                * Calculate the entropy with the retrieved probability
+            * Arguments:
+                * meas_outcome [map_tuple]: Measurement outcome in the form {p_free, p_occ, p_unk}
+            * Return:
+                * kt_double: Measurement outcome entropy
+            */
+
+            // Log of probabilities (Free, Occupied, Not observed)
+            kt_double l_free = log(0.3 / (1.0 - 0.3));
+            kt_double l_occ = log(0.7 / (1.0 - 0.7));
+            kt_double l_o = log(0.5 / (1.0 - 0.5));
+
+            int num_free, num_occ, num_unk;
+            std::tie(num_free, num_occ, num_unk) = meas_outcome;
+            kt_double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
+            kt_double prob_occ = calculateProbabilityFromLogOdds(log_occ);
+            return calculateInformationContent(prob_occ);
+        }
+
+        kt_double calculateProbabilityFromLogOdds(kt_double log)
+        {
+            /**
+             * Map Log-Odds into probability
+             * Arguments:
+                * log [kt_double]: Log-Odds
+            * Return:
+                * kt_double: Probability
+            */
+            return (exp(log) / (1 + exp(log)));
+        }
+    } // namespace probability_operations
+
 } // namespace utils

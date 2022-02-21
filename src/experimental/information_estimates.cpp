@@ -1,8 +1,6 @@
 #include <math.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
-#include <iostream>
-
 InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu)
 {
     m_max_sensor_range = sensor_range;
@@ -178,7 +176,7 @@ kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::Lo
                 kt_double cell_mutual_inf = 0.0f;
                 for (auto& pair : meas_out_prob)
                 {
-                    cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
+                    cell_mutual_inf +=  pair.second * utils::probability_operations::calculateMeasurementOutcomeEntropy(pair.first);
                 }
 
                 // Mutual information of cell x, y given a set of measurements
@@ -187,9 +185,10 @@ kt_double InformationEstimates::mutualInformationFromScans(std::vector<karto::Lo
         }
         ++curr_idx;
     }
+    m_cell_probabilities.clear();
+
     return m_mutual_grid.sum();
 }
-
 
 void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell)
 {
@@ -201,14 +200,14 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
      * Return:
         * Void
     */
-    std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
+    std::map<karto::Vector2<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
 
-    it_cell = m_cell_probabilities.find({cell.GetX(), cell.GetY()});
+    it_cell = m_cell_probabilities.find(cell);
     if (it_cell == m_cell_probabilities.end())
     {
         // Cell is not present in the map, so append it
-        m_cell_probabilities.insert(std::pair<std::vector<int>, std::vector<std::vector<kt_double>>>(
-            {cell.GetX(), cell.GetY()}, {{measurements[0], measurements[1], measurements[2]}}));
+        m_cell_probabilities.insert(std::pair<karto::Vector2<int>, std::vector<std::vector<kt_double>>>(
+            cell, {measurements}));
         m_visited_grid(cell.GetX(), cell.GetY()) = 1;
     }
     else
@@ -233,30 +232,6 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
             m_visited_grid(cell.GetX(), cell.GetY()) = 1;
         }
     }
-}
-
-kt_double InformationEstimates::calculateInformationContent(kt_double prob)
-{
-    /**
-     * Calculate the information content or self-information based on the probability of cell being occupied
-     * Arguments:
-        * prob [kt_double]: Probability of being occupied
-     * Return:
-        * kt_double: Information content
-    */
-    return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
-}
-
-kt_double InformationEstimates::calculateProbabilityFromLogOdds(kt_double log)
-{
-    /**
-     * Map Log-Odds into probability
-     * Arguments:
-        * log [kt_double]: Log-Odds
-     * Return:
-        * kt_double: Probability
-    */
-    return (exp(log) / (1 + exp(log)));
 }
 
 std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm)
@@ -368,25 +343,6 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash
         }
     }
     return out_map;
-}
-
-kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const& meas_outcome)
-{
-    /**
-     * Calculate the measurement outcome entropy
-        * Calculate Log-Odds from initial probability guess
-        * Calculate the probability from those logs
-        * Calculate the entropy with the retrieved probability
-     * Arguments:
-        * meas_outcome [map_tuple]: Measurement outcome in the form {p_free, p_occ, p_unk}
-     * Return:
-        * kt_double: Measurement outcome entropy
-    */
-    int num_free, num_occ, num_unk;
-    std::tie(num_free, num_occ, num_unk) = meas_outcome;
-    kt_double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
-    kt_double prob_occ = calculateProbabilityFromLogOdds(log_occ);
-    return calculateInformationContent(prob_occ);
 }
 
 kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2)
