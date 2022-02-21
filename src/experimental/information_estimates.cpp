@@ -216,7 +216,7 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
         {
             // Compare the unknown probability, the smallest it is the most information we will have
             // from the occupied or free state
-            int idx = it_cell->second.size() - 1;
+            int idx = it_cell->second.size();
             if(measurements[2] < it_cell->second[idx][2])
             {
                 // Replacing
