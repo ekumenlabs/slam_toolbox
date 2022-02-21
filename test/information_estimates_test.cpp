@@ -69,6 +69,12 @@ TEST(UtilsInformationEstimatesTests, RayCastTest)
     ASSERT_EQ(cells[4].GetX(), 17) << "FAIL in X position 3 for cell 5";
     ASSERT_EQ(cells[4].GetY(), 47) << "FAIL in Y position 3 for cell 5";
 
+    // Degenerate case
+    karto::Vector2<int> initial_pt_5{22,43};
+    karto::Vector2<int> final_pt_5{22,43};
+    cells = utils::grid_operations::rayCasting(initial_pt_4, final_pt_4);
+    ASSERT_EQ(cells[0].GetX(), 22) << "Degenerate case X";
+    ASSERT_EQ(cells[0].GetY(), 43) << "Degenerate case Y";
 }
 
 TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
@@ -92,6 +98,8 @@ TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
     karto::Vector2<kt_double> cell_end_p{8.7, 8.7};
     int_points = utils::grid_operations::calculateCellIntersectionPoints(laser_start_p, laser_end_p, cell_start_p, cell_end_p);
 
+    // I should change here the longitud instead
+    // .size() or.Lenght()
     ASSERT_FLOAT_EQ(int_points.GetX(), 0.0) << "FAIL in X coordinate parallel";
     ASSERT_FLOAT_EQ(int_points.GetY(), 0.0) << "FAIL in Y coordinate parallel";
 }

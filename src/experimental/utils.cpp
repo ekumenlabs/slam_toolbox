@@ -191,8 +191,7 @@ namespace utils
             if (den == 0.0f)
             {
                 // Parallel lines
-                intersection.SetX(0.0);
-                intersection.SetY(0.0);
+                return {};
             }
             else
             {

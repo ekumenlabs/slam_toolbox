@@ -414,10 +414,7 @@ std::vector<std::vector<kt_double>> InformationEstimates::retrieveCellProbabilit
      * Return:
         * std::vector<std::vector<kt_double>>: Vector of cell probabilities in the form {p_free, p_occ, p_unk} (Measurement outcomes)
     */
-    std::map<std::vector<int>, std::vector<std::vector<kt_double>>>::iterator it_cells;
-    it_cells = m_cell_probabilities.find({cell.GetX(), cell.GetY()});
-
-    return it_cells->second;
+    return m_cell_probabilities.at(cell);
 }
 
 void InformationEstimates::updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell)
