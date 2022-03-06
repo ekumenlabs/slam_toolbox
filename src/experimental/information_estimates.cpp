@@ -17,14 +17,14 @@ InformationEstimates::InformationEstimates()
     m_obs_nu = 0.28;
 }
 
-std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)
+std::vector<kt_double> InformationEstimates::findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
     /**
      * Find and return the Laser Scan index which provide the less mutual information in a set of Laser Scans
      * Arguments:
         * range_scans [std::vector<karto::LocalizedRangeScan*>]: Vector of LocalizedRangeScan pointers
      * Return:
-        * std::tuple<int, kt_double>: Tuple containing the index of the LozalizedRangeScan and its corresponding mutual information
+        * std::vector<kt_double>: Vector containing the mutual information fo each of the processed laser scans
     */
 
     // Get the robot poses for creating our new local coordinate system
@@ -84,12 +84,7 @@ std::tuple<int, kt_double> InformationEstimates::findLeastInformativeLaser(std::
         m_mutual_grid.setZero();
     }
 
-    // Finding the less informative laser scan
-    std::vector<kt_double>::iterator it_min;
-    it_min = std::min_element(scans_mut_info.begin(), scans_mut_info.end());
-    int idx = it_min - scans_mut_info.begin();
-
-    return std::make_tuple(idx, *it_min);
+    return scans_mut_info;
 }
 
 

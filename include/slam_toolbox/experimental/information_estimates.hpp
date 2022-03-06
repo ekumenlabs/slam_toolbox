@@ -14,7 +14,7 @@ public:
 
 public:
     // Main function
-    std::tuple<int, kt_double> findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans);
+    std::vector<kt_double> findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 
 private:
     // Mutual information

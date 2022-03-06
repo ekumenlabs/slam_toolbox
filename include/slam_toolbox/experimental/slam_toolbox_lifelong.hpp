@@ -76,6 +76,9 @@ protected:
   double candidates_scale_;
   double iou_match_;
   double nearby_penalty_;
+
+  InformationEstimates inf_estimates_{10.0, 0.05, 0.35, 0.28};
+
 };
 
 }  // namespace slam_toolbox
