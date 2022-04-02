@@ -27,6 +27,7 @@ private:
     // Measurement outcomes probabilities
     void appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell);
     std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm);
+    void insertMeasurementOutcome(map_tuple tuple, kt_double probability, std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple>& map);
     std::vector<std::vector<kt_double>> retrieveCellProbabilities(karto::Vector2<int> const & cell);
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>

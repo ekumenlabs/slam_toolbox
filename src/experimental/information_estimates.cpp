@@ -229,6 +229,21 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double>& measu
     }
 }
 
+void InformationEstimates::insertMeasurementOutcome(map_tuple tuple, kt_double probability, std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple>& map)
+{
+    int key_free, key_occ, key_unk;
+    std::tie(key_free, key_occ, key_unk) = tuple;
+
+    if (map[std::make_tuple(key_free, key_occ, key_unk)])
+    {
+        map[std::make_tuple(key_free, key_occ, key_unk)] += probability;
+    }
+    else
+    {
+        map[std::make_tuple(key_free, key_occ, key_unk)] = probability;
+    }
+}
+
 std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash::HashTuple> InformationEstimates::computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm)
 {
     /**
@@ -239,105 +254,49 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash
      * Return:
         * std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash::HashTuple>: Map of combination, it contains the combination and its probability
     */
+
+    std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> probabilities_map;
     std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> temp_map;
 
-    // The number of measurements
-    int k = meas_outcm.size();
-    int r = 1;
-
-    kt_double p_free = meas_outcm[0][0];
-    kt_double p_occ = meas_outcm[0][1];
-    kt_double p_un = meas_outcm[0][2];
-
+    // Clear the temporal map
     temp_map.clear();
+    probabilities_map.clear();
 
     // Root
-    temp_map[std::make_tuple(0, 0, 0)] = 1.0f;
+    if (meas_outcm.size() == 0)
+    {
+        probabilities_map[std::make_tuple(0, 0, 0)] = 1.0f;
+    }
 
     // First measurement
-    temp_map[std::make_tuple(1, 0, 0)] = p_free;
-    temp_map[std::make_tuple(0, 1, 0)] = p_occ;
-    temp_map[std::make_tuple(0, 0, 1)] = p_un;
+    probabilities_map[std::make_tuple(1, 0, 0)] = meas_outcm[0][0]; // Probability free
+    probabilities_map[std::make_tuple(0, 1, 0)] = meas_outcm[0][1]; // Probability occupied
+    probabilities_map[std::make_tuple(0, 0, 1)] = meas_outcm[0][2]; // Probability unknown
 
-    for (int r = 1; r < k; ++r)
+    for (int r = 1; r < meas_outcm.size(); ++r)
     {
-        std::vector<map_tuple> tup_vct;
-        std::vector<kt_double> acc_prob;
-
         // Measurement outcome probability
         kt_double free_prop = meas_outcm[r][0];
         kt_double occ_prop = meas_outcm[r][1];
-        kt_double un_prop = meas_outcm[r][2];
+        kt_double unk_prop = meas_outcm[r][2];
 
-        for (auto& pair : temp_map)
+        // Temporal map to only take the last level combination
+        temp_map = probabilities_map;
+        probabilities_map.clear();
+
+        for (auto & combination : temp_map)
         {
-            // Index
-            int idx_free, idx_occ, idx_unk;
-            std::tie(idx_free, idx_occ, idx_unk) = pair.first;
+            int key_free, key_occ, key_unk;
+            std::tie(key_free, key_occ, key_unk) = combination.first;
 
-            if (idx_free + idx_occ + idx_unk == r)
-            {
-                // Searching for the current combination in this level
-                std::vector<map_tuple>::iterator it_comb;
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free + 1, idx_occ, idx_unk));
-
-                // Free
-                if (it_comb != tup_vct.end())
-                {
-                    acc_prob[it_comb - tup_vct.begin()] += pair.second * free_prop;
-                }
-                else
-                {
-                    tup_vct.push_back(std::make_tuple(idx_free + 1, idx_occ, idx_unk));
-                    acc_prob.push_back(pair.second * free_prop);
-                }
-
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ + 1, idx_unk));
-
-                // Occupied
-                if (it_comb != tup_vct.end())
-                {
-                    acc_prob[it_comb - tup_vct.begin()] += pair.second * occ_prop;
-                }
-                else
-                {
-                    tup_vct.push_back(std::make_tuple(idx_free, idx_occ + 1, idx_unk));
-                    acc_prob.push_back(pair.second * occ_prop);
-                }
-
-                it_comb = std::find(tup_vct.begin(), tup_vct.end(), std::make_tuple(idx_free, idx_occ, idx_unk + 1));
-
-                // Unobserved
-                if (it_comb != tup_vct.end())
-                {
-                    acc_prob[it_comb - tup_vct.begin()] += pair.second * un_prop;
-                }
-                else
-                {
-                    tup_vct.push_back(std::make_tuple(idx_free, idx_occ, idx_unk + 1));
-                    acc_prob.push_back(pair.second * un_prop);
-                }
-            }
+            // Adding next level measurement outcomes
+            insertMeasurementOutcome(std::make_tuple(key_free + 1, key_occ, key_unk), combination.second * free_prop, probabilities_map);
+            insertMeasurementOutcome(std::make_tuple(key_free, key_occ + 1, key_unk), combination.second * occ_prop, probabilities_map);
+            insertMeasurementOutcome(std::make_tuple(key_free, key_occ, key_unk + 1), combination.second * unk_prop, probabilities_map);
         }
-        // Inserting the elements into the map
-        for (int k = 0; k < tup_vct.size(); ++k)
-        {
-            temp_map[tup_vct[k]] = acc_prob[k];
-        }
+        temp_map.clear();
     }
-
-    // Leaving in the map only the final outcomes
-    std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> out_map;
-    for (auto& pair : temp_map)
-    {
-        int idx_free, idx_occ, idx_unk;
-        std::tie(idx_free, idx_occ, idx_unk) = pair.first;
-        if (idx_free + idx_occ + idx_unk == k)
-        {
-            out_map[pair.first] = pair.second;
-        }
-    }
-    return out_map;
+    return probabilities_map;
 }
 
 kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2)
