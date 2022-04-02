@@ -22,13 +22,11 @@ private:
     kt_double measurementOutcomeEntropy(map_tuple const& meas_outcome);
     kt_double calculateProbabilityFromLogOdds(kt_double log);
     kt_double mutualInformationFromScans(std::vector<karto::LocalizedRangeScan*> const& range_scans, bool ignore_scan=false, int scan_idx=0);
-    void updateCellMutualInformation(kt_double mut_inf, karto::Vector2<int> const & cell);
 
     // Measurement outcomes probabilities
     void appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell);
     std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm);
     void insertMeasurementOutcome(map_tuple tuple, kt_double probability, std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple>& map);
-    std::vector<std::vector<kt_double>> retrieveCellProbabilities(karto::Vector2<int> const & cell);
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
