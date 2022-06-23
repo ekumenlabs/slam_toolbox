@@ -15,7 +15,7 @@ public:
 public:
     // Main function
     std::vector<kt_double> findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans);
-
+    kt_double finMutualInfo(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 private:
     // Mutual information
     kt_double calculateInformationContent(kt_double prob);
