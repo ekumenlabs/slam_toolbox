@@ -21,27 +21,35 @@ InformationEstimates::InformationEstimates()
 kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
     /*
-        For your reference @hidmic
-
-        The loop I am working on.
-
-        1. Find the grid size based on the ranges of a group of scans.
-            2. Select one cell.
-                3. Find which scans can see that cell.
-                    4. Select one scan from the group.
-                        5. Find the beam that sees the selected cell.
-                            6. Calculate and append the probability of that cell being seen.
-
-        Note for point 3:
-            I am not sure if we should have another loop right before this point.
-                - We should extract one scan from the group of scans.
-                - Then execute steps 3, 4, 5, 6.
-            Following it, we will be able to find what is the laser that contains less mutual information.
-
-            Another alternative for facing this issue could be: Have a external loop for extracting one scan
-            at a time, and then use the ramining scans to execute all the steps explained above.
+        1. Parate en una celda de la grid inicial.
+        2. Identifica cuales laser scans del grupo actual pueden ver esta celda. (Maximum range radius)
+        3. Cuales haz de luz del scan seleccionado puede ver esa celda.
+        4. Resto de operaciones.
     */
 
+    /*
+    Para el punto 0:
+        - Debe existir un loop exterior para ir removiendo un laser scan a la vez, con esto identifico cual es el scan
+        que aporta menor informacion del grupo dado.
+    */
+
+    /*
+    Para el punto 1 y 2:
+        - Toma el pose del scan actual.
+        - Encuentra la distancia del centro del scan con respecto al centro de la celda que nos interesa.
+        - Si esa diferencia es menor que el rango del scan, entonces consideramos este scan. (Agregamos ese scan a un vector)
+
+    Esto puedo afrontarlo de forma local, lo que significa que por cada set de scans que reciba,
+    puedo encontrar los extremos para poder reescalar el grid, esto potencialmente reduce el tiempo de busqueda.
+    */
+
+    /*
+    Para el punto 3:
+        - Con las lecturas de ese scan, encuentro el haz de luz que este dentro de la celda.
+        - Potencialmente puedo encontrar dos lectura, pero por ahora elegire el primero que encuentre.
+    */
+
+    // ------------ Start of Grid resizing ------------ //
     // I took the first scan for reference. From this one I extract the min an max points (Poses)
     m_low_x = range_scans[0]->GetCorrectedPose().GetX();
     m_low_y = range_scans[0]->GetCorrectedPose().GetY();
@@ -49,7 +57,7 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
     m_high_x = range_scans[0]->GetCorrectedPose().GetX();
     m_high_y = range_scans[0]->GetCorrectedPose().GetY();
 
-    // Iterating through the group of scans to rescale the grid
+    //  Iterating through the group of scans to rescale the grid
     for (const auto & scan : range_scans)
     {
         if (scan == nullptr)
@@ -77,7 +85,6 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
     m_high_x += m_max_sensor_range;
     m_high_y += m_max_sensor_range;
 
-    // ===== Grid resizing =====
     // Map dimensions
     kt_double dist_x = std::fabs(m_high_x) + std::fabs(m_low_x);
     kt_double dist_y = std::fabs(m_high_y) + std::fabs(m_low_y);
@@ -90,117 +97,178 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
     m_mutual_grid.resize(n_cells_x, n_cells_y);
     m_visited_grid.resize(n_cells_x, n_cells_y);
 
-    int low_x = range_scans[0]->GetCorrectedPose().GetX();
-    int low_y = range_scans[0]->GetCorrectedPose().GetY();
+    // ------------ End of Grid resizing ------------ //
 
-    int high_x = range_scans[0]->GetCorrectedPose().GetX();
-    int high_y = range_scans[0]->GetCorrectedPose().GetY();
-
-    // ===== Main Loop =====
     // I would need to move it N times
     // Cause here I do remove one scan at a time and call the following loop
 
+    /*
+        Para encontrar el scan que menor mutual information proporciona debo tener un loop para ir removiendo uno a uno.
+            1. El loop externo es solamente un for que itera N veces. (Dado por al longitud del vector de scans)
+            2 Adentro solamente existe un condicional que se salta ese scan en la busqueda actual
+    */
     // Iterating through the cells
-    for (int i = 0; i < n_cells_x; ++i)
+    kt_double mutual_information = 0.0f;
+
+    for (int n = 0; n < range_scans.size(); ++n)
     {
-        for (int j = 0; j < n_cells_y; ++j)
+        for (int i = 0; i < n_cells_x; ++i)
         {
-            // Iterating through the scans to find which one hits this cell
-            for (const auto & scan : range_scans)
+            for (int j = 0; j < n_cells_y; ++j)
             {
-                karto::Pose2 pose = scan->GetCorrectedPose();
-                karto::Vector2<int> min_cell = utils::grid_operations::getGridPosition(min_pt, m_cell_resol);
-                karto::Vector2<int> max_cell = utils::grid_operations::getGridPosition(max_pt, m_cell_resol);
+                /*
+                    Tengo una celda especifica dentro del mapa
+                    Puedo saber que lasers ven esa celda para evaluar estos
 
-                // kt_double cell_y {(min_cell[1] + max_cell[1]) / 2};
-                // kt_double cell_x {(min_cell[0] + max_cell[0])/ 2};
-                // if (sqrt(pow((pose[0] - cell_x), 2) + pow((pose[1] - cell_y), 2)) > m_max_sensor_range)
-                // {
-                //     continue;
-                // }
-
-                // Lowest X point
-                kt_double low_pt_x = pose.GetX() - m_max_sensor_range;
-                low_pt_x = low_pt_x < 0.0 ? 0.0 : low_pt_x;
-                // Maximum X point
-                kt_double max_pt_x = pose.GetX() + m_max_sensor_range;
-                max_pt_x = max_pt_x > dist_x ? dist_x : max_pt_x;
-                // Lowest Y point
-                kt_double low_pt_y = pose.GetY() - m_max_sensor_range;
-                low_pt_y = low_pt_y < 0.0 ? 0.0 : low_pt_y;
-                // Maximum Y point
-                kt_double max_pt_y = pose.GetY() + m_max_sensor_range;
-                max_pt_y = max_pt_y > dist_y ? dist_y : max_pt_y;
-
-                karto::Vector2<kt_double> min_pt{low_pt_x, low_pt_y};
-                karto::Vector2<kt_double> max_pt{max_pt_x, max_pt_y};
-
-                // This assertion is just to avoid evaluation
-                if ((i <= min_pt.GetX() || i >= max_pt.GetX()) || (j <= min_pt.GetY() || j >= max_pt.GetY()))
+                    - I have this not written but I Need to find a way to calculate the mutual information for a group
+                    of scans when I remove one element of that group
+                    - I can Iterate over the scans here
+                    - But I would nneed to removew one scan at a time
+                */
+                // Iterating through the scans to find which one hits this cell
+                std::vector<std::vector<kt_double>> cell_probabilities;
+                int current_scan_idx = 0;
+                for (const auto & scan : range_scans)
                 {
-                    continue;
-                }
-
-                // Current scan laser readings
-                karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
-
-                karto::Pose2 robot_pose_raw = scan->GetCorrectedPose();
-                karto::Pose2 robot_pose(robot_pose_raw.GetX() - m_low_x, robot_pose_raw.GetY() - m_low_y, robot_pose_raw.GetHeading());
-                karto::Vector2<int> robot_grid = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
-
-                // ----- Point 3 -----
-                // NIT: @kmilo7204 can use the range based for here
-                for (int i = 0; i < laser_readings.size(); ++i)
-                {
-                    karto::Vector2<kt_double> transformed_laser{laser_readings[i].GetX() - m_low_x, laser_readings[i].GetY() - m_low_y};
-
-                    karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(transformed_laser, m_cell_resol);
-                    kt_double laser_to_grid_dist =
-                        sqrt(pow((transformed_laser[0] - kt_double(beam_grid[0])), 2) + pow((transformed_laser[1] - kt_double(beam_grid[1])), 2));
-
-                    // Compare the point here, the transformed laser and the cell position
-                    // If not fulfill the condition I wrote above, continue
-                    if (laser_to_grid_dist > m_cell_resol)
+                    // On this way I make sure to extract one laser at a time
+                    if (current_scan_idx == n)
                     {
                         continue;
                     }
 
-                    // Inidividual cell limits
-                    kt_double limit_x = i * m_cell_resol;
-                    kt_double limit_y = j * m_cell_resol;
+                    karto::Pose2 robot_pose_raw = scan->GetCorrectedPose();
+                    // karto::Pose2 scan_pose(raw_scan_pose.GetX() - m_low_x, raw_scan_pose.GetY() - m_low_y, raw_scan_pose.GetHeading());
 
-                    std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(
-                    robot_pose.GetPosition(), transformed_laser, robot_grid, beam_grid, limit_x, limit_y, m_cell_resol);
+                    // karto::Vector2<int> min_cell = utils::grid_operations::getGridPosition(min_pt, m_cell_resol);
+                    // karto::Vector2<int> max_cell = utils::grid_operations::getGridPosition(max_pt, m_cell_resol);
+                    // kt_double cell_y {(min_cell[1] + max_cell[1]) / 2};
+                    // kt_double cell_x {(min_cell[0] + max_cell[0])/ 2};
+                    // if (sqrt(pow((pose[0] - cell_x), 2) + pow((pose[1] - cell_y), 2)) > m_max_sensor_range)
+                    // {
+                    //     continue;
+                    // }
 
-                    // In case we did not find a measurement
-                    if (intersections.first.size() == 0)
+                    // Lowest X point
+                    kt_double low_pt_x = robot_pose_raw.GetX() - m_max_sensor_range; // X: Posicion del scan - Rango maximo (Para saber si el scan ve por fuera del grid)
+                    low_pt_x = low_pt_x < 0.0 ? 0.0 : low_pt_x;
+                    // Maximum X point
+                    kt_double max_pt_x = robot_pose_raw.GetX() + m_max_sensor_range; // X: Posicion del scan + Rango maximo (Para saber si el scan ve por fuera del grid)
+                    max_pt_x = max_pt_x > dist_x ? dist_x : max_pt_x;
+                    // Lowest Y point
+                    kt_double low_pt_y = robot_pose_raw.GetY() - m_max_sensor_range; // Y: Posicion del scan - Rango maximo (Para saber si el scan ve por fuera del grid)
+                    low_pt_y = low_pt_y < 0.0 ? 0.0 : low_pt_y;
+                    // Maximum Y point
+                    kt_double max_pt_y = robot_pose_raw.GetY() + m_max_sensor_range; // Y: Posicion del scan + Rango maximo (Para saber si el scan ve por fuera del grid)
+                    max_pt_y = max_pt_y > dist_y ? dist_y : max_pt_y;
+
+                    karto::Vector2<kt_double> min_pt{low_pt_x, low_pt_y}; // Esto es distancia no posicion de celda
+                    karto::Vector2<kt_double> max_pt{max_pt_x, max_pt_y}; // Esto es distancia no posicion de celda
+
+                    // Esto podia ser un karto::Pose2
+                    // karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& pose, kt_double resolution)
+                    karto::Vector2<int> min_cell = utils::grid_operations::getGridPosition(min_pt, m_cell_resol);
+                    karto::Vector2<int> max_cell = utils::grid_operations::getGridPosition(max_pt, m_cell_resol);
+
+                    // i and j are the current row and column
+                    if ((i < min_cell.GetX() || i > max_cell.GetX()) || (j < min_cell.GetY() || j > max_cell.GetY()))
                     {
                         continue;
                     }
 
-                    // Enter (d1) and Exit (d2) distances
-                    std::vector<kt_double> distances;
-                    for (int k = 0; k < intersections.first.size(); ++k)
+                    // Current scan laser readings
+                    karto::PointVectorDouble laser_readings = scan->GetPointReadings(true);
+
+                    karto::Pose2 robot_pose(robot_pose_raw.GetX() - m_low_x, robot_pose_raw.GetY() - m_low_y, robot_pose_raw.GetHeading());
+                    karto::Vector2<int> robot_grid_position = utils::grid_operations::getGridPosition(robot_pose.GetPosition(), m_cell_resol);
+
+                    /*
+                        Ahora que estoy dentro de un grid local, debo hacer una transformacion simple de
+                        la posicion del robot y de cada uno de los lasers, para asi poder compararlos correctamente
+                        con cada una de las celdas.
+                    */
+
+                    // ----- Point 3 -----
+                    // I could use some kind of angle to filter the region where the scan is.
+                    // I can use the range based for here
+                    for (int i = 0; i < laser_readings.size(); ++i)
                     {
-                        // From robot position to intersection points
-                        karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
-                        kt_double distance = robot_pose.GetPosition().Distance(intersection);
-                        distances.push_back(distance);
-                    }
+                        karto::Vector2<kt_double> transformed_laser{laser_readings[i].GetX() - m_low_x, laser_readings[i].GetY() - m_low_y};
 
-                    // Measurement outcomes vector {Pfree, Pocc, Pun}
-                    std::vector<kt_double> probabilities {
-                        calculateScanMassProbabilityBetween(distances[1], m_max_sensor_range),
-                        calculateScanMassProbabilityBetween(distances[0], distances[1]),
-                        calculateScanMassProbabilityBetween(0.0f, distances[0])
-                    };
+                        // I need to transform here
+                        karto::Vector2<int> beam_grid = utils::grid_operations::getGridPosition(transformed_laser, m_cell_resol);
 
-                    // Appending new measurement outcomes for the current cell
-                    appendCellProbabilities(probabilities, cell);
+                        // kt_double laser_to_grid_dist =
+                        //     sqrt(pow((transformed_laser.GetX() - kt_double(beam_grid.GetX())), 2) + pow((transformed_laser.GetY() - kt_double(beam_grid.GetY())), 2));
+
+                        // This calculation is not real, cause resting the limits no the center of the cell
+                        kt_double laser_to_grid_dist =
+                            sqrt(pow((transformed_laser.GetX() - (i * m_cell_resol)), 2) + pow((transformed_laser.GetY() - (j * m_cell_resol)), 2));
+
+                        // Compare the point here, the transformed laser and the cell position
+                        // If not fulfill the condition I wrote above, continue
+                        if (laser_to_grid_dist > m_cell_resol)
+                        {
+                            continue;
+                        }
+
+                        // ----- Point 4 -----
+                        // Aqui ya encontre cual es el haz de luz que funciona
+                        // Ahora debo hacer el calculo de observacion hasta esa celda final
+
+                        // Inidividual cell limits
+                        kt_double limit_x = i * m_cell_resol;
+                        kt_double limit_y = j * m_cell_resol;
+
+                        std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections = utils::grid_operations::computeLineBoxIntersection(
+                        robot_pose.GetPosition(), transformed_laser, robot_grid_position, beam_grid, limit_x, limit_y, m_cell_resol);
+
+                        // In case we did not find a measurement
+                        if (intersections.first.size() == 0)
+                        {
+                            continue;
+                        }
+
+                        // Enter (d1) and Exit (d2) distances
+                        std::vector<kt_double> distances;
+                        for (int k = 0; k < intersections.first.size(); ++k)
+                        {
+                            // From robot position to intersection points
+                            karto::Vector2<kt_double> intersection{intersections.first[k], intersections.second[k]};
+                            kt_double distance = robot_pose.GetPosition().Distance(intersection);
+                            distances.push_back(distance);
+                        }
+
+                        // Measurement outcomes vector {Pfree, Pocc, Pun}
+                        std::vector<kt_double> probabilities {
+                            calculateScanMassProbabilityBetween(distances[1], m_max_sensor_range),
+                            calculateScanMassProbabilityBetween(distances[0], distances[1]),
+                            calculateScanMassProbabilityBetween(0.0f, distances[0])
+                        };
+
+                        // I got the probability of seen the current cell as o/f/u
+                        // Now I need to save the current measuremets of that cell to calculate the histogram
+                        cell_probabilities.push_back(probabilities);
+                    } // EOF Laser Readings FOR
+
+                    ++current_scan_idx;
+                } // EOF Range Scans FOR
+
+
+                std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(cell_probabilities);
+
+                kt_double cell_mutual_inf = 0.0f;
+                for (auto& pair : meas_out_prob)
+                {
+                    cell_mutual_inf +=  pair.second * measurementOutcomeEntropy(pair.first);
                 }
-            }
-        }
-    }
+                // 1.0 for the entropy since the cell is in an unknown state
+                mutual_information += 1.0 - cell_mutual_inf;
+            } // EOF Columns FOR
+        } // EOF Rows FOR
+    } // EOF Number Scans FOR
+
+    // Note: This not the real answer, since I would return the scan that provides the less information (This is just a placeholder for compilation)
+    return mutual_information;
 }
 
 std::vector<kt_double> InformationEstimates::findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)

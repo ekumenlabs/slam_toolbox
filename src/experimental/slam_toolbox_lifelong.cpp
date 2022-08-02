@@ -127,10 +127,10 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
       computeScores(near_scan_vertices, range_scan);
 
     ScoredVertices::iterator it;
-    kt_double mutual_removol_sacore = 1500.0;
+    kt_double mutual_removol_score = 1500.0;
 
     for (it = scored_verices.begin(); it != scored_verices.end(); ++it) {
-      if (it->GetScore() < mutual_removol_sacore) {
+      if (it->GetScore() < mutual_removol_score) {
         RCLCPP_DEBUG(get_logger(),
           "Removing node %i from graph with score: %f and old score: %f.",
           it->GetVertex()->GetObject()->GetUniqueId(),
@@ -142,6 +142,15 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
     }
   }
 }
+
+
+//
+/*
+  nullptr evaluation
+  Test minimizar el radio del scan para procesar menor cantidad de scans.
+  Test constraint en el tama;o del grafo. El siguiente nodo despues del limite va a ser borrado
+*/
+//
 
 /*****************************************************************************/
 Vertices LifelongSlamToolbox::FindScansWithinRadius(
