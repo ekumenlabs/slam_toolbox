@@ -17,9 +17,16 @@ InformationEstimates::InformationEstimates()
     m_obs_nu = 0.28;
 }
 
-
-kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRangeScan *> const &range_scans)
+std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRangeScan *> const &range_scans)
 {
+    /*
+        Note: In fact, I should calculate the mutual information with all the elements
+        and then calculate the mutual information of each element.
+
+        -- Keep this in mind:
+        Entre menos informacion mutua apora, mayor va a ser el resultado total del la operacion al extraerlo.
+    */
+    std::vector<kt_double> result_vector;
     m_low_x = range_scans[0]->GetCorrectedPose().GetX();
     m_low_y = range_scans[0]->GetCorrectedPose().GetY();
 
@@ -94,6 +101,10 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
 
         karto::Vector2<int> local_robot_cell = utils::grid_operations::getGridPosition(local_grid_robot_pose.GetPosition(), m_cell_resol);
 
+        // std::cout << " =================== " << std::endl;
+        // std::cout << "Lower limit cell: " << lower_limit_cell.GetX() << ", " << lower_limit_cell.GetY() << std::endl;
+        // std::cout << "Upper limit cell: " << upper_limit_cell.GetX() << ", " << upper_limit_cell.GetY() << std::endl;
+
         karto::LaserRangeFinder *laser_range_finder = range_scans[n]->GetLaserRangeFinder();
         kt_double range_threshold = laser_range_finder->GetRangeThreshold();
         kt_double angle_increment = laser_range_finder->GetAngularResolution();
@@ -116,7 +127,12 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
                     // Evaluate if the current laser that will be evaluated should be excluded
                     if (n == l)
                     {
-                        // Current laser will not be evaluated
+                        // Current laser will noe be evaluated
+                        if (!printed)
+                        {
+                            // std::cout << "Skipping: " << l << std::endl;
+                            printed = true;
+                        }
                         continue;
                     }
 
@@ -217,11 +233,21 @@ kt_double InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRange
             // Mutual information of cell x, y given a set of measurements
             m_mutual_grid(cell.GetX(), cell.GetY()) = 1.0 - cell_mutual_inf;
         }
-        std::cout << "Mutual information: " << m_mutual_grid.sum() << std::endl;
+        // std::cout << "Mutual information: " << m_mutual_grid.sum() << std::endl;
+        result_vector.push_back(m_mutual_grid.sum());
+
+        // Puedo tener un vector que me almacene el resultado
+        // Entonces el push va a ser secuencial
+        // Cada resultado va a demostrar la informacion mutua calculada cuando se toma todo el grupo - el scan de interes
+        // Por ejemplo vct[0] = Index 0 es el calculo de la informacion mutua excluyendo el primer scan
+        // Por ejemplo vct[1] = Index 1 es el calculo de la informacion mutua excluyendo el segundo scan
+        // Por ejemplo vct[2] = Index 2 es el calculo de la informacion mutua excluyendo el tercer scan
+
         m_cell_probabilities.clear();
     }
-    return 5.0;
+    return result_vector;
 }
+
 
 std::vector<kt_double> InformationEstimates::findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans)
 {
