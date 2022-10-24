@@ -19,6 +19,7 @@ InformationEstimates::InformationEstimates()
 
 std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRangeScan *> const &range_scans)
 {
+    std::cout << "Vector size: " << range_scans.size() << std::endl;
     /*
         Note: In fact, I should calculate the mutual information with all the elements
         and then calculate the mutual information of each element.
@@ -63,6 +64,9 @@ std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::L
     kt_double dim_x = std::fabs(m_high_x - m_low_x) + (2 * m_max_sensor_range);
     kt_double dim_y = std::fabs(m_high_y - m_low_y) + (2 * m_max_sensor_range);
 
+    // std::cout << "X Dimension: " << dim_x << std::endl;
+    // std::cout << "Y Dimension: " << dim_y << std::endl;
+
     // Get the number of cells
     int n_cells_x = static_cast<int>(dim_x / m_cell_resol);
     int n_cells_y = static_cast<int>(dim_y / m_cell_resol);
@@ -71,6 +75,7 @@ std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::L
     m_mutual_grid.resize(n_cells_x, n_cells_y);
     m_visited_grid.resize(n_cells_x, n_cells_y);
 
+    // for (int n = 0; n < 1; ++n)
     int skip_laser = 0;
     for (int n = 0; n < range_scans.size(); ++n)
     {
@@ -221,6 +226,7 @@ std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::L
             }
         }
 
+        // std::cout << "<------------------------->" << std::endl;
         for (auto &cell : vis_cells)
         {
             std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> meas_out_prob = computeMeasurementOutcomesHistogram(m_cell_probabilities.at(cell));
