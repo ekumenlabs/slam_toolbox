@@ -18,6 +18,9 @@ public:
     std::vector<kt_double> findMutualInfo(std::vector<karto::LocalizedRangeScan *> const &range_scans);
 
 private:
+    void resizeGridFromScans(std::vector<karto::LocalizedRangeScan *> const & range_scans);
+    std::vector<kt_double> iterateCells(std::vector<karto::LocalizedRangeScan *> const & range_scans);
+
     // Mutual information
     kt_double calculateInformationContent(kt_double prob);
     kt_double measurementOutcomeEntropy(map_tuple const& meas_outcome);
@@ -46,9 +49,17 @@ private:
     kt_double m_high_x;
     kt_double m_high_y;
 
+    kt_double m_upper_limit_x;
+    kt_double m_upper_limit_y;
+    kt_double m_lower_limit_x;
+    kt_double m_lower_limit_y;
+
     // Map grids
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
+
+    kt_double m_map_dim_x;
+    kt_double m_map_dim_y;
 };
 
 #endif
