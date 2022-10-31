@@ -5,10 +5,20 @@ namespace utils
 {
     namespace grid_operations
     {
-        void updateCellLimits(std::vector<kt_double>& initial_x, std::vector<kt_double>& initial_y, std::vector<kt_double>& final_x,
-            std::vector<kt_double>& final_y, kt_double limit_x, kt_double limit_y, std::vector<kt_double>& cell_limits, karto::Vector2<int> const& robot_grid_pos,
-            karto::Vector2<int> const& final_grid_pos, kt_double resolution)
+        void updateCellLimits(
+            std::vector<kt_double>& initial_x,
+            std::vector<kt_double>& initial_y,
+            std::vector<kt_double>& final_x,
+            std::vector<kt_double>& final_y,
+            kt_double limit_x,
+            kt_double limit_y,
+            std::vector<kt_double>& cell_limits,
+            karto::Vector2<int> const& robot_grid_pos,
+            karto::Vector2<int> const& final_grid_pos,
+            kt_double resolution
+        )
         {
+            // This function needs a verification
             /**
              * To calculate grid limits for intersection
              * Arguments:
@@ -27,7 +37,6 @@ namespace utils
              */
             if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() >= robot_grid_pos.GetY())
             {
-                // X greater and Y greater. WRO final points
                 final_x[0] = limit_x + resolution;
                 final_x[2] = limit_x + resolution;
 
@@ -37,36 +46,17 @@ namespace utils
 
             if (final_grid_pos.GetX() >= robot_grid_pos.GetX() && final_grid_pos.GetY() < robot_grid_pos.GetY())
             {
-                // X greater and Y minor. WRO final points
                 initial_y[2] = limit_y - resolution;
                 initial_y[3] = limit_y - resolution;
 
                 final_y[1] = limit_y - resolution;
                 final_y[3] = limit_y - resolution;
 
-                cell_limits[2] = limit_y - resolution;
-                cell_limits[3] = limit_y;
-            }
-
-            if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() < robot_grid_pos.GetY())
-            {
-                // X minor and Y minor. WRO final points
-                initial_x[2] = limit_x - resolution;
-                initial_x[3] = limit_x - resolution;
-                initial_y[2] = limit_y - resolution;
-                initial_y[3] = limit_y - resolution;
-
-                final_x[0] = limit_x - resolution;
-                final_x[2] = limit_x - resolution;
-                final_y[1] = limit_y - resolution;
-                final_y[3] = limit_y - resolution;
-
-                cell_limits[0] = limit_x - resolution;
-                cell_limits[1] = limit_x;
                 cell_limits[2] = limit_y - resolution;
                 cell_limits[3] = limit_y;
             }
         }
+
 
         int signum(int num)
         {
@@ -82,71 +72,35 @@ namespace utils
             return 0;
         }
 
-        std::vector<karto::Vector2<int>> rayCasting(
-            karto::Vector2<int> const& initial_pt, karto::Vector2<int> const& final_pt)
+
+        void clearVisitedCells(Eigen::MatrixXd & grid)
         {
             /**
-             * Find the set of cells hit by a laser beam (Bresenham algorithm)
+             * Clear the given floating Eigen::Matrix
              * Arguments:
-                * initial_pt [karto::Vector2<int>]: Laser beam initial position
-                * final_pt [karto::Vector2<int>]: Laser beam final position
-             * Return:
-                * std::vector<karto::Vector2<int>>: Vector of cells visited by the given laser beam
+                * grid [Eigen::Matrix]: Grid for cleaning
+            * Return:
+                * Void
              */
-            std::vector<karto::Vector2<int>> cells;
-
-            int x = initial_pt.GetX();
-            int y = initial_pt.GetY();
-
-            int delta_x = abs(final_pt.GetX() - initial_pt.GetX());
-            int delta_y = abs(final_pt.GetY() - initial_pt.GetY());
-
-            int s_x = signum(final_pt.GetX() - initial_pt.GetX());
-            int s_y = signum(final_pt.GetY() - initial_pt.GetY());
-            bool interchange = false;
-
-            if (delta_y > delta_x)
-            {
-                int temp = delta_x;
-                delta_x = delta_y;
-                delta_y = temp;
-                interchange = true;
-            }
-            else { interchange = false; }
-
-            int a_res = 2 * delta_y;
-            int b_res = 2 * (delta_y - delta_x);
-            int e_res = (2 * delta_y) - delta_x;
-
-            cells.push_back(karto::Vector2<int>{x, y});
-
-            for (int i = 1; i < delta_x; ++i)
-            {
-                if (e_res < 0)
-                {
-                    if (interchange) { y += s_y; }
-                    else { x += s_x; }
-                    e_res += a_res;
-                }
-                else
-                {
-                    y += s_y;
-                    x += s_x;
-                    e_res += b_res;
-                }
-                cells.push_back(karto::Vector2<int>{x, y});
-            }
-            // Delete the current robot cell
-            cells.erase(cells.begin());
-
-            // Adding last hit cell to the set
-            cells.push_back(karto::Vector2<int>{final_pt.GetX(), final_pt.GetY()});
-
-            return cells;
+            grid.setZero();
         }
 
 
-        karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& pose, kt_double resolution)
+        void clearVisitedCells(Eigen::MatrixXi & grid)
+        {
+            /**
+             * Clear the given integer Eigen::Matrix
+             * Arguments:
+                * grid [Eigen::Matrix]: Grid for cleaning
+             * Return:
+                * Void
+             */
+
+            grid.setZero();
+        }
+
+
+        karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& position, kt_double resolution)
         {
             /**
              * Mapping a continuous position into a grid position
@@ -156,11 +110,12 @@ namespace utils
              * Return:
                 * karto::Vector2<int>: Grid position
              */
-            int x_cell = floor((pose.GetX() / resolution));
-            int y_cell = floor((pose.GetY() / resolution));
+            int x_cell = floor((position.GetX() / resolution));
+            int y_cell = floor((position.GetY() / resolution));
 
             return karto::Vector2<int>{x_cell, y_cell};
         }
+
 
         karto::Vector2<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start,
             karto::Vector2<kt_double> const & laser_end, karto::Vector2<kt_double> const & cell_start, karto::Vector2<kt_double> const & cell_end)
@@ -175,6 +130,7 @@ namespace utils
              * Return:
                 * karto::Vector2<kt_double>: Intersection point
              */
+
             kt_double x1 = laser_start.GetX();
             kt_double x2 = laser_end.GetX();
             kt_double x3 = cell_start.GetX();
@@ -190,8 +146,7 @@ namespace utils
             karto::Vector2<kt_double> intersection;
             if (den == 0.0f)
             {
-                // Parallel lines
-                return {};
+                return{};
             }
             else
             {
@@ -200,13 +155,20 @@ namespace utils
                 intersection.SetX(x);
                 intersection.SetY(y);
             }
+
             return intersection;
         }
 
+
         std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
-            karto::Vector2<kt_double> const & laser_start, karto::Vector2<kt_double> const & laser_end,
-            karto::Vector2<int> const& robot_grid_pos, karto::Vector2<int> const& final_grid_pos,
-            kt_double limit_x, kt_double limit_y, kt_double resolution)
+            karto::Vector2<kt_double> const & laser_start,
+            karto::Vector2<kt_double> const & laser_end,
+            karto::Vector2<int> const& robot_grid_pos,
+            karto::Vector2<int> const& final_grid_pos,
+            kt_double limit_x,
+            kt_double limit_y,
+            kt_double resolution
+        )
         {
             /**
              * Compute intersection between a cell and a laser beam
@@ -238,11 +200,26 @@ namespace utils
 
             std::vector<kt_double> inter_x, inter_y;
 
+            /*
+                initial {limit_x, limit_y}
+                final {limit_x + res, limit_y}
+
+                initial {limit_x, limit_y}
+                final {limit_x, limit_y + res}
+
+                initial {limit_x + res, limit_y + res}
+                final {limit_x + res, limit_y}
+
+                initial {limit_x + res, limit_y + res}
+                final {limit_x, limit_y + res}
+            */
+
             for (int k = 0; k < 4; ++k)
             {
                 karto::Vector2<kt_double> start{initial_x[k], initial_y[k]};
                 karto::Vector2<kt_double> end{final_x[k], final_y[k]};
                 karto::Vector2<kt_double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, start, end);
+
                 if(intersection.Length() != 0)
                 {
                     if ((fabs(intersection.GetX()) >= (fabs(cell_limits[0]) - 0.001)) &&
@@ -258,61 +235,9 @@ namespace utils
                     }
                 }
             }
+
             return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y};
         }
 
     } // namespace grid_operations
-
-    namespace probability_operations
-    {
-        kt_double calculateInformationContent(kt_double prob)
-        {
-            /**
-             * Calculate the information content or self-information based on the probability of cell being occupied
-             * Arguments:
-                * prob [kt_double]: Probability of being occupied
-            * Return:
-                * kt_double: Information content
-            */
-            return - (prob * log2(prob)) -  ((1 - prob) * log2(1 - prob));
-        }
-
-        kt_double calculateMeasurementOutcomeEntropy(std::tuple<int, int, int> const& meas_outcome)
-        {
-            /**
-             * Calculate the measurement outcome entropy
-                * Calculate Log-Odds from initial probability guess
-                * Calculate the probability from those logs
-                * Calculate the entropy with the retrieved probability
-            * Arguments:
-                * meas_outcome [map_tuple]: Measurement outcome in the form {p_free, p_occ, p_unk}
-            * Return:
-                * kt_double: Measurement outcome entropy
-            */
-
-            // Log of probabilities (Free, Occupied, Not observed)
-            kt_double l_free = log(0.3 / (1.0 - 0.3));
-            kt_double l_occ = log(0.7 / (1.0 - 0.7));
-            kt_double l_o = log(0.5 / (1.0 - 0.5));
-
-            int num_free, num_occ, num_unk;
-            std::tie(num_free, num_occ, num_unk) = meas_outcome;
-            kt_double log_occ = (num_free * l_free) + (num_occ * l_occ) - ((num_free + num_occ - 1) * l_o);
-            kt_double prob_occ = calculateProbabilityFromLogOdds(log_occ);
-            return calculateInformationContent(prob_occ);
-        }
-
-        kt_double calculateProbabilityFromLogOdds(kt_double log)
-        {
-            /**
-             * Map Log-Odds into probability
-             * Arguments:
-                * log [kt_double]: Log-Odds
-            * Return:
-                * kt_double: Probability
-            */
-            return (exp(log) / (1 + exp(log)));
-        }
-    } // namespace probability_operations
-
 } // namespace utils
