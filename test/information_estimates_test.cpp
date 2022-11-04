@@ -5,7 +5,6 @@
 #include <gtest/gtest.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
-
 TEST(UtilsInformationEstimatesTests, SigNumTest)
 {
     InformationEstimates information_estimates;
@@ -15,66 +14,54 @@ TEST(UtilsInformationEstimatesTests, SigNumTest)
     ASSERT_EQ(utils::grid_operations::signum(0), 0) << "FAIL in zero";
 }
 
-TEST(UtilsInformationEstimatesTests, RayCastTest)
+TEST(UtilsInformationEstimatesTests, )
 {
-    /**
-     * Quadrants are taken from the initial location
-     */
-    InformationEstimates information_estimates;
-    std::vector<karto::Vector2<int>> cells;
+    // calculateInformationContent
+}
 
-    // First quadrant
-    karto::Vector2<int> initial_pt_1{22,43};
-    karto::Vector2<int> final_pt_1{29,38};
+TEST(UtilsInformationEstimatesTests, GridPositionsTest)
+{
+    karto::Vector2<kt_double> position{10.3, 52.7};
+    kt_double resolution = 0.5;
+    karto::Vector2<int> grid_position = utils::grid_operations::getGridPosition(position, resolution);
+    ASSERT_EQ(grid_position[0], 20);
+    ASSERT_EQ(grid_position[1], 105);
+}
 
-    // First quadrant
-    cells = utils::grid_operations::rayCasting(initial_pt_1, final_pt_1);
-    // Third point - First quadrant
-    ASSERT_EQ(cells[2].GetX(), 25) << "FAIL in X position 1 for cell 3";
-    ASSERT_EQ(cells[2].GetY(), 41) << "FAIL in Y position 1 for cell 3";
-    // Fifth point - First quadrant
-    ASSERT_EQ(cells[4].GetX(), 27) << "FAIL in X position 1 for cell 5";
-    ASSERT_EQ(cells[4].GetY(), 39) << "FAIL in Y position 1 for cell 5";
+TEST(UtilsInformationEstimatesTests, LineBoxIntersectionTest)
+{
+    kt_double resolution = 0.5;
 
-    // Second quadrant
-    karto::Vector2<int> initial_pt_2{22,43};
-    karto::Vector2<int> final_pt_2{15,38};
-    cells = utils::grid_operations::rayCasting(initial_pt_2, final_pt_2);
-    // Third point - Second quadrant
-    ASSERT_EQ(cells[2].GetX(), 19) << "FAIL in X position 2 for cell 3";
-    ASSERT_EQ(cells[2].GetY(), 41) << "FAIL in Y position 2 for cell 3";
-    // Fifth point - Second quadrant
-    ASSERT_EQ(cells[4].GetX(), 17) << "FAIL in X position 2 for cell 5";
-    ASSERT_EQ(cells[4].GetY(), 39) << "FAIL in Y position 2 for cell 5";
+    karto::Vector2<kt_double> scan_position{ 18.3, 16.1 };
+    karto::Vector2<kt_double> beam_end_point{ 22.2, 12.7 };
 
-    // Third quadrant
-    karto::Vector2<int> initial_pt_3{22,43};
-    karto::Vector2<int> final_pt_3{29,48};
-    cells = utils::grid_operations::rayCasting(initial_pt_3, final_pt_3);
-    // Third point - Third quadrant
-    ASSERT_EQ(cells[2].GetX(), 25) << "FAIL in X position 3 for cell 3";
-    ASSERT_EQ(cells[2].GetY(), 45) << "FAIL in Y position 3 for cell 3";
-    // Fifth point - Third quadrant
-    ASSERT_EQ(cells[4].GetX(), 27) << "FAIL in X position 3 for cell 5";
-    ASSERT_EQ(cells[4].GetY(), 47) << "FAIL in Y position 3 for cell 5";
+    karto::Vector2<int> scan_position_cell = utils::grid_operations::getGridPosition(scan_position, resolution);
+    karto::Vector2<int> beam_end_cell = utils::grid_operations::getGridPosition(beam_end_point, resolution);
 
-    // Fourth quadrand
-    karto::Vector2<int> initial_pt_4{22,43};
-    karto::Vector2<int> final_pt_4{15,48};
-    cells = utils::grid_operations::rayCasting(initial_pt_4, final_pt_4);
-    // Third point - Fourth quadrant
-    ASSERT_EQ(cells[2].GetX(), 19) << "FAIL in X position 3 for cell 3";
-    ASSERT_EQ(cells[2].GetY(), 45) << "FAIL in Y position 3 for cell 3";
-    // Fifth point - Fourth quadrant
-    ASSERT_EQ(cells[4].GetX(), 17) << "FAIL in X position 3 for cell 5";
-    ASSERT_EQ(cells[4].GetY(), 47) << "FAIL in Y position 3 for cell 5";
+    karto::Vector2<int> const & cell { 12, 13 };
 
-    // Degenerate case
-    karto::Vector2<int> initial_pt_5{22,43};
-    karto::Vector2<int> final_pt_5{22,43};
-    cells = utils::grid_operations::rayCasting(initial_pt_4, final_pt_4);
-    ASSERT_EQ(cells[0].GetX(), 22) << "Degenerate case X";
-    ASSERT_EQ(cells[0].GetY(), 43) << "Degenerate case Y";
+    // Result could be not intersection or intersection
+    utils::grid_operations::computeLineBoxIntersection(
+        scan_position,
+        beam_end_point,
+        scan_position_cell,
+        beam_end_cell
+        cell.GetX() * resolution,
+        cell.GetY() * resolution,
+        resolution
+    );
+
+    // Assert size;
+    // Assert values
+
+    // std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
+    //     karto::Vector2<kt_double> const &laser_start,
+    //     karto::Vector2<kt_double> const &laser_end,
+    //     karto::Vector2<int> const &robot_grid_pos,
+    //     karto::Vector2<int> const &final_grid_pos,
+    //     kt_double limit_x,
+    //     kt_double limit_y,
+    //     kt_double resolution);
 }
 
 TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
@@ -151,7 +138,7 @@ TEST(InformationEstimatesTests, MutualInformationTest)
     range_scan_vct.push_back(s2.get());
     range_scan_vct.push_back(s3.get());
 
-    std::vector<kt_double> mut_inf_vct = inf_estimates.findLeastInformativeLaser(range_scan_vct);
+    // std::vector<kt_double> mut_inf_vct = inf_estimates.findLeastInformativeLaser(range_scan_vct);
 
     // Min value should be different to zero (We only have now the mutual information)
     // This will be solved as soon as I fixed the error in the main loop
@@ -159,7 +146,7 @@ TEST(InformationEstimatesTests, MutualInformationTest)
     // EXPECT_NE(mut_inf, 0.0) << "FAIL in mutual information equality";
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

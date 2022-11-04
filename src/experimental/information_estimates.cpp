@@ -314,8 +314,6 @@ std::vector<karto::Vector2<int>> InformationEstimates::getScanGroupVisitedCells(
 std::vector<kt_double> InformationEstimates::findMutualInfo(
     std::vector<karto::LocalizedRangeScan *> const &range_scans)
 {
-    std::cout << "Vector size: " << range_scans.size() << std::endl;
-
     std::vector<kt_double> result_vector;
     resizeGridFromScans(range_scans);
 

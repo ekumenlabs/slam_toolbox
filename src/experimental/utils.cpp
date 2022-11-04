@@ -18,7 +18,6 @@ namespace utils
             kt_double resolution
         )
         {
-            // This function needs a verification
             /**
              * To calculate grid limits for intersection
              * Arguments:
