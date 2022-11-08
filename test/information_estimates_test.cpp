@@ -14,9 +14,22 @@ TEST(UtilsInformationEstimatesTests, SigNumTest)
     ASSERT_EQ(utils::grid_operations::signum(0), 0) << "FAIL in zero";
 }
 
-TEST(UtilsInformationEstimatesTests, )
+TEST(UtilsInformationEstimatesTests, InformationContentTest)
 {
-    // calculateInformationContent
+    InformationEstimates inf_estimates;
+    kt_double result = inf_estimates.calculateInformationContent(0.75);
+    ASSERT_DOUBLE_EQ(result, 0.81125);
+}
+
+TEST(UtilsInformationEstimatesTests, ScanMassProbabilityBetweenTest)
+{
+    kt_double range_1 = 4.25;
+    kt_double range_2 = 6.12;
+
+    InformationEstimates inf_estimates;
+    kt_double probability = inf_estimates.calculateScanMassProbabilityBetween(range_1, range_2);
+
+    ASSERT_DOUBLE_EQ(probability, 0.07522);
 }
 
 TEST(UtilsInformationEstimatesTests, GridPositionsTest)
@@ -38,30 +51,38 @@ TEST(UtilsInformationEstimatesTests, LineBoxIntersectionTest)
     karto::Vector2<int> scan_position_cell = utils::grid_operations::getGridPosition(scan_position, resolution);
     karto::Vector2<int> beam_end_cell = utils::grid_operations::getGridPosition(beam_end_point, resolution);
 
-    karto::Vector2<int> const & cell { 12, 13 };
+    karto::Vector2<int> const & cell { 11, 6 };
 
     // Result could be not intersection or intersection
-    utils::grid_operations::computeLineBoxIntersection(
-        scan_position,
-        beam_end_point,
-        scan_position_cell,
-        beam_end_cell
-        cell.GetX() * resolution,
-        cell.GetY() * resolution,
-        resolution
-    );
+    std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections =
+        utils::grid_operations::computeLineBoxIntersection(
+            scan_position,
+            beam_end_point,
+            scan_position_cell,
+            beam_end_cell
+            cell.GetX() * resolution,
+            cell.GetY() * resolution,
+            resolution
+        );
 
-    // Assert size;
-    // Assert values
+    ASSERT_TRUE(intersections.first.size() != 0)
 
-    // std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
-    //     karto::Vector2<kt_double> const &laser_start,
-    //     karto::Vector2<kt_double> const &laser_end,
-    //     karto::Vector2<int> const &robot_grid_pos,
-    //     karto::Vector2<int> const &final_grid_pos,
-    //     kt_double limit_x,
-    //     kt_double limit_y,
-    //     kt_double resolution);
+    // Enter (d1) and Exit (d2) distances
+    std::vector<kt_double> distances;
+    for (int k = 0; k < intersections.first.size(); ++k)
+    {
+        // From robot position to intersection points
+        karto::Vector2<kt_double> intersection{
+            intersections.first[k],
+            intersections.second[k]
+        };
+        kt_double distance = scan_position.Distance(intersection);
+        distances.push_back(distance);
+        std::sort(distances.begin(), distances.end());
+    }
+
+    ASSERT_DOUBLE_EQ(distance[0], 21.28235);
+    ASSERT_DOUBLE_EQ(distance[1], 13.5);
 }
 
 TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
@@ -75,8 +96,8 @@ TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
     karto::Vector2<kt_double> cell_end_i{4.7, 1.6};
     int_points = utils::grid_operations::calculateCellIntersectionPoints(laser_start_i, laser_end_i, cell_start_i, cell_end_i);
 
-    ASSERT_FLOAT_EQ(int_points.GetX(), 4.06744) << "FAIL in X coordinate intersection";
-    ASSERT_FLOAT_EQ(int_points.GetY(), 5.39535) << "FAIL in Y coordinate intersection";
+    ASSERT_DOUBLE_EQ(int_points.GetX(), 4.06744) << "FAIL in X coordinate intersection";
+    ASSERT_DOUBLE_EQ(int_points.GetY(), 5.39535) << "FAIL in Y coordinate intersection";
 
     // Parallel lines
     karto::Vector2<kt_double> laser_start_p{1.5, 1.5};
@@ -87,8 +108,8 @@ TEST(UtilsInformationEstimatesTests, IntersectionPointsTest)
 
     // I should change here the longitud instead
     // .size() or.Lenght()
-    ASSERT_FLOAT_EQ(int_points.GetX(), 0.0) << "FAIL in X coordinate parallel";
-    ASSERT_FLOAT_EQ(int_points.GetY(), 0.0) << "FAIL in Y coordinate parallel";
+    ASSERT_DOUBLE_EQ(int_points.GetX(), 0.0) << "FAIL in X coordinate parallel";
+    ASSERT_DOUBLE_EQ(int_points.GetY(), 0.0) << "FAIL in Y coordinate parallel";
 }
 
 TEST(InformationEstimatesTests, MutualInformationTest)

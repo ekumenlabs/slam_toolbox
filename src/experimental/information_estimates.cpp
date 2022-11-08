@@ -380,6 +380,8 @@ void InformationEstimates::appendCellProbabilities(
 
 kt_double InformationEstimates::calculateInformationContent(kt_double prob)
 {
+    // @hidmic is this a good candidate for an static function?
+    // or even an utils function
     /**
      * Calculate the information content or self-information based on the probability of cell being occupied
      * Arguments:
@@ -506,6 +508,7 @@ kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double ra
 {
     /**
      * Calculate the mass probability of a cell being observed by a given measurement
+     * This functions follows and exponential distribution
      * Arguments:
         * range_1 [kt_double]: Lower bound
         * range_2 [kt_double]: Upper bound
