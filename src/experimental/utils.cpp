@@ -1,58 +1,56 @@
 #include "slam_toolbox/experimental/utils.hpp"
 #include <iostream>
 
+
 namespace utils
 {
     namespace grid_operations
     {
         void updateCellLimits(
-            std::vector<kt_double>& initial_x,
-            std::vector<kt_double>& initial_y,
-            std::vector<kt_double>& final_x,
-            std::vector<kt_double>& final_y,
-            kt_double limit_x,
-            kt_double limit_y,
-            std::vector<kt_double>& cell_limits,
-            karto::Vector2<int> const& robot_grid_pos,
-            karto::Vector2<int> const& final_grid_pos,
-            kt_double resolution
+            std::array<karto::Vector2<kt_double>, 4> & initial_points,
+            std::array<karto::Vector2<kt_double>, 4> & final_points,
+            karto::Vector2<kt_double> const & current_point,
+            std::array<kt_double, 4> & cell_limits,
+            utils::Segment2<int> const & discretized_segment,
+            kt_double const & resolution
         )
         {
             /**
              * To calculate grid limits for intersection
              * Arguments:
-                * initial_x [std::vector<kt_double>]: Cell initial limits in x (4 possible limits)
-                * initial_y [std::vector<kt_double>]: Cell initial limits in y (4 possible limits)
-                * final_x [std::vector<kt_double>]: Cell final limits in x (4 possible limits)
-                * final_y [std::vector<kt_double>]: Cell final limits in y (4 possible limits)
-                * limit_x [kt_double]: Current cell position in x (Transformed from int to kt_double)
-                * limit_y [kt_double]: Current cell position in y (Transformed from int to kt_double)
-                * cell_limits [std::vector<kt_double>]: Cell final points for assertion in x and y
+                * initial_points [std::array<karto::Vector2<kt_double>, 4>]: Cell initial point in x and y (4 corners)
+                * final_points [std::array<karto::Vector2<kt_double>, 4>]: Cell final point in x and y (4 corners)
+                * current_point [karto::Vector2<kt_double>]: Current cell position
+                * cell_limits [std::array<kt_double, 4>]: Cell final points for assertion in x and y
                 * robot_grip_position [std::vector<kt_double>]: Initial laser beam position
                 * final_grid_position [std::vector<kt_double>]: Final laser beam position
                 * resolution [kt_double]: Cell resolution
              * Return:
                 * Void
              */
-            if (final_grid_pos.GetX() < robot_grid_pos.GetX() && final_grid_pos.GetY() >= robot_grid_pos.GetY())
+            if (discretized_segment.end.GetX() < discretized_segment.start.GetX()
+                && discretized_segment.end.GetY() >= discretized_segment.start.GetY()
+            )
             {
-                final_x[0] = limit_x + resolution;
-                final_x[2] = limit_x + resolution;
+                final_points[0].SetX(current_point.GetX() + resolution);
+                final_points[2].SetX(current_point.GetX() + resolution);
 
-                cell_limits[2] = limit_y;
-                cell_limits[3] = limit_y + resolution;
+                cell_limits[2] = current_point.GetY();
+                cell_limits[3] = current_point.GetY() + resolution;
             }
 
-            if (final_grid_pos.GetX() >= robot_grid_pos.GetX() && final_grid_pos.GetY() < robot_grid_pos.GetY())
+            if (discretized_segment.end.GetX() >= discretized_segment.start.GetX()
+                && discretized_segment.end.GetY() < discretized_segment.start.GetY()
+            )
             {
-                initial_y[2] = limit_y - resolution;
-                initial_y[3] = limit_y - resolution;
+                initial_points[2].SetY(current_point.GetY() - resolution);
+                initial_points[3].SetY(current_point.GetY() - resolution);
 
-                final_y[1] = limit_y - resolution;
-                final_y[3] = limit_y - resolution;
+                final_points[1].SetY(current_point.GetY() - resolution);
+                final_points[3].SetY(current_point.GetY() - resolution);
 
-                cell_limits[2] = limit_y - resolution;
-                cell_limits[3] = limit_y;
+                cell_limits[2] = current_point.GetY() - resolution;
+                cell_limits[3] = current_point.GetY();
             }
         }
 
@@ -72,34 +70,7 @@ namespace utils
         }
 
 
-        void clearVisitedCells(Eigen::MatrixXd & grid)
-        {
-            /**
-             * Clear the given floating Eigen::Matrix
-             * Arguments:
-                * grid [Eigen::Matrix]: Grid for cleaning
-            * Return:
-                * Void
-             */
-            grid.setZero();
-        }
-
-
-        void clearVisitedCells(Eigen::MatrixXi & grid)
-        {
-            /**
-             * Clear the given integer Eigen::Matrix
-             * Arguments:
-                * grid [Eigen::Matrix]: Grid for cleaning
-             * Return:
-                * Void
-             */
-
-            grid.setZero();
-        }
-
-
-        karto::Vector2<int> getGridPosition(karto::Vector2<kt_double> const& position, kt_double resolution)
+        karto::Vector2<int> discretize(karto::Vector2<kt_double> const & position, kt_double const & resolution)
         {
             /**
              * Mapping a continuous position into a grid position
@@ -109,64 +80,63 @@ namespace utils
              * Return:
                 * karto::Vector2<int>: Grid position
              */
-            int x_cell = floor((position.GetX() / resolution));
-            int y_cell = floor((position.GetY() / resolution));
+            const int x_cell = floor((position.GetX() / resolution));
+            const int y_cell = floor((position.GetY() / resolution));
 
             return karto::Vector2<int>{x_cell, y_cell};
         }
 
+        std::optional<int> returnint(bool b)
+        {
+            if (b)
+            {
+                return 2;
+            }
+            return {};
+        }
 
-        karto::Vector2<kt_double> calculateCellIntersectionPoints(karto::Vector2<kt_double> const & laser_start,
-            karto::Vector2<kt_double> const & laser_end, karto::Vector2<kt_double> const & cell_start, karto::Vector2<kt_double> const & cell_end)
+
+        karto::Vector2<kt_double> calculateCellIntersectionPoints(
+            utils::Segment2<kt_double> const & segment_1,
+            utils::Segment2<kt_double> const & segment_2
+        )
         {
             /**
-             * Find the intersection point between a cell line and a laser beam
+             * Find the intersection point between two segments (cell and laser beam)
              * Arguments:
-                * laser_start [karto::Vector2<kt_double>]: Laser initial point in x and y
-                * laser_end [karto::Vector2<kt_double>]: Laser final point in x and y
-                * cell_start [karto::Vector2<kt_double>]: Cell initial point in x and y
-                * cell_end [karto::Vector2<kt_double>]: Cell final point in x and y
+                * segment_1 [utils::Segment2<kt_double>]: First segment points
+                * segment_2 [utils::Segment2<kt_double>]: Second segment points
              * Return:
                 * karto::Vector2<kt_double>: Intersection point
              */
 
-            kt_double x1 = laser_start.GetX();
-            kt_double x2 = laser_end.GetX();
-            kt_double x3 = cell_start.GetX();
-            kt_double x4 = cell_end.GetX();
+            const kt_double x1 = segment_1.start.GetX();
+            const kt_double x2 = segment_1.end.GetX();
+            const kt_double x3 = segment_2.start.GetX();
+            const kt_double x4 = segment_2.end.GetX();
 
-            kt_double y1 = laser_start.GetY();
-            kt_double y2 = laser_end.GetY();
-            kt_double y3 = cell_start.GetY();
-            kt_double y4 = cell_end.GetY();
+            const kt_double y1 = segment_1.start.GetY();
+            const kt_double y2 = segment_1.end.GetY();
+            const kt_double y3 = segment_2.start.GetY();
+            const kt_double y4 = segment_2.end.GetY();
 
-            kt_double den = ((x2 - x1)*(y4 - y3) - (x4 - x3)*(y2 - y1));
+            const kt_double den = ((x2 - x1)*(y4 - y3) - (x4 - x3)*(y2 - y1));
 
-            karto::Vector2<kt_double> intersection;
-            if (den == 0.0f)
+            if (den != 0.0f)
             {
-                return{};
+                const kt_double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2 - x1)) / den;
+                const kt_double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2 - y1)) / den;
+                const karto::Vector2<kt_double> intersection { x, y };
+                return intersection;
             }
-            else
-            {
-                kt_double x = ((x2*y1 - x1*y2)*(x4 - x3) - (x4*y3 - x3*y4)*(x2 - x1)) / den;
-                kt_double y = ((x2*y1 - x1*y2)*(y4 - y3) - (x4*y3 - x3*y4)*(y2 - y1)) / den;
-                intersection.SetX(x);
-                intersection.SetY(y);
-            }
-
-            return intersection;
+            return {};
         }
 
 
         std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
-            karto::Vector2<kt_double> const & laser_start,
-            karto::Vector2<kt_double> const & laser_end,
-            karto::Vector2<int> const& robot_grid_pos,
-            karto::Vector2<int> const& final_grid_pos,
-            kt_double limit_x,
-            kt_double limit_y,
-            kt_double resolution
+            utils::Segment2<kt_double> const & segment,
+            karto::Vector2<kt_double> const & current_point,
+            kt_double const & resolution
         )
         {
             /**
@@ -176,55 +146,72 @@ namespace utils
                 * laser_end [karto::Vector2<kt_double>]: Laser final point in x and y
                 * robot_grid_pos [karto::Vector2<int>]: Initial grid position in x and y
                 * final_grid_pos [karto::Vector2<int>]: Final grid position in x and y
-                * limit_x [kt_double]: Current cell position in x (Transformed from int to kt_double)
-                * limit_y [kt_double]: Current cell position in y (Transformed from int to kt_double)
+                * current_point [kt_double]: Current cell position in x and y
                 * resolution [kt_double]: Cell resolution
              * Return:
                 * std::vector<kt_double>: Intersection point
              */
+            utils::Segment2<int> discretized_segment {
+                discretize(segment.start, resolution),
+                discretize(segment.end, resolution)
+            };
 
-            // Cell limits: min_x, max_x, min_y, max_y
-            std::vector<kt_double> cell_limits {limit_x, limit_x + resolution, limit_y, limit_y + resolution};
+            std::array<kt_double, 4> cell_limits {
+                current_point.GetX(),
+                current_point.GetX() + resolution,
+                current_point.GetY(),
+                current_point.GetY() + resolution
+            };
 
-            // Initial points for each of the 4 corners
-            std::vector<kt_double> initial_x {limit_x, limit_x, limit_x + resolution, limit_x + resolution};
-            std::vector<kt_double> initial_y {limit_y, limit_y, limit_y + resolution, limit_y + resolution};
+            std::array<karto::Vector2<kt_double>, 4> initial_points{{
+                {current_point.GetX(), current_point.GetY()},
+                {current_point.GetX(), current_point.GetY()},
+                {current_point.GetX() + resolution, current_point.GetY() + resolution},
+                {current_point.GetX() + resolution, current_point.GetY() + resolution}
+            }};
 
-            // Final points for each of the 4 corners
-            std::vector<kt_double> final_x {limit_x + resolution, limit_x, limit_x + resolution, limit_x};
-            std::vector<kt_double> final_y {limit_y, limit_y + resolution, limit_y, limit_y + resolution};
+            std::array<karto::Vector2<kt_double>, 4> final_points{{
+                {current_point.GetX() + resolution, current_point.GetY()},
+                {current_point.GetX(), current_point.GetY() + resolution},
+                {current_point.GetX() + resolution, current_point.GetY()},
+                {current_point.GetX(), current_point.GetY() + resolution}
+            }};
 
             // Set the new cell limits
-            updateCellLimits(initial_x, initial_y, final_x, final_y, limit_x, limit_y, cell_limits, robot_grid_pos, final_grid_pos, resolution);
+            updateCellLimits(initial_points, final_points, current_point, cell_limits, discretized_segment, resolution);
 
             std::vector<kt_double> inter_x, inter_y;
 
             /*
-                initial {limit_x, limit_y}
-                final {limit_x + res, limit_y}
+                initial {current_point.GetX(), current_point.GetY()}
+                final {current_point.GetX() + res, current_point.GetY()}
 
-                initial {limit_x, limit_y}
-                final {limit_x, limit_y + res}
+                initial {current_point.GetX(), current_point.GetY()}
+                final {current_point.GetX(), current_point.GetY() + res}
 
-                initial {limit_x + res, limit_y + res}
-                final {limit_x + res, limit_y}
+                initial {current_point.GetX() + res, current_point.GetY() + res}
+                final {current_point.GetX() + res, current_point.GetY()}
 
-                initial {limit_x + res, limit_y + res}
-                final {limit_x, limit_y + res}
+                initial {current_point.GetX() + res, current_point.GetY() + res}
+                final {current_point.GetX(), current_point.GetY() + res}
             */
 
             for (int k = 0; k < 4; ++k)
             {
-                karto::Vector2<kt_double> start{initial_x[k], initial_y[k]};
-                karto::Vector2<kt_double> end{final_x[k], final_y[k]};
-                karto::Vector2<kt_double> intersection = calculateCellIntersectionPoints(laser_start, laser_end, start, end);
+                karto::Vector2<kt_double> start { initial_points[k].GetX(), initial_points[k].GetY() };
+                karto::Vector2<kt_double> end { final_points[k].GetX(), final_points[k].GetY() };
+
+                utils::Segment2<kt_double> cell_segment { start, end };
+
+                karto::Vector2<kt_double> intersection = calculateCellIntersectionPoints(segment, cell_segment);
 
                 if(intersection.Length() != 0)
                 {
                     if ((fabs(intersection.GetX()) >= (fabs(cell_limits[0]) - 0.001)) &&
-                    (fabs(intersection.GetX()) <= (fabs(cell_limits[1]) + 0.001)) &&
-                    (fabs(intersection.GetY()) >= (fabs(cell_limits[2]) - 0.001)) &&
-                    (fabs(intersection.GetY()) <= (fabs(cell_limits[3]) + 0.001)))
+                        (fabs(intersection.GetX()) <= (fabs(cell_limits[1]) + 0.001)) &&
+                        (fabs(intersection.GetY()) >= (fabs(cell_limits[2]) - 0.001)) &&
+                        (fabs(intersection.GetY()) <= (fabs(cell_limits[3]) + 0.001))
+                    )
                     {
                         // Two points where the beam cuts the cell
                         //  - A laser beam can cut the cell at least 1 time (Enter)
@@ -237,6 +224,5 @@ namespace utils
 
             return std::pair<std::vector<kt_double>, std::vector<kt_double>>{inter_x, inter_y};
         }
-
     } // namespace grid_operations
 } // namespace utils

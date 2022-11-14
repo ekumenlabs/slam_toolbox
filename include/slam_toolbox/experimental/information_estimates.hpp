@@ -13,6 +13,8 @@ public:
     virtual ~InformationEstimates() {}
 
 public:
+    // Main function
+    // std::vector<kt_double> findLeastInformativeLaser(std::vector<karto::LocalizedRangeScan*> const& range_scans);
     std::vector<kt_double> findMutualInfo(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 
 private:
@@ -23,10 +25,8 @@ private:
         karto::Vector2<int> const & cell
     );
 
-    std::vector<kt_double> calculateBeamAndCellIntersections(
-        kt_bool & skip_cell_eval,
-        karto::Vector2<kt_double> const & scan_position,
-        karto::Vector2<kt_double> const & beam_read_point,
+    std::optional<std::vector<kt_double>> calculateBeamAndCellIntersections(
+        utils::Segment2<kt_double> const & beam_segment,
         karto::Vector2<int> const & cell
     );
 
@@ -37,9 +37,8 @@ private:
         karto::LaserRangeFinder *laser_range_finder
     );
 
-    void adjustBeamReadingDistance(
-        kt_bool & skip_cell_eval,
-        kt_double & beam_distance,
+    std::optional<kt_double> adjustBeamReadingDistance(
+        kt_double const & beam_distance,
         kt_double const & distance_to_cell,
         karto::LaserRangeFinder *laser_range_finder
     );
@@ -60,9 +59,11 @@ private:
         std::vector<kt_double> & scans_mutual_information
     );
 
-    int findClosestLaserIndexToCell(
-        karto::Vector2<int> const & cell,
-        karto::Pose2 const & grid_scan_pose);
+    std::optional<int> InformationEstimates::findClosestLaserIndexToCell(
+        kt_double const & angle_to_cell,
+        kt_double const & scan_pose_heading,
+        karto::LaserRangeFinder *laser_range_finder
+    );
 
     void calculateCellProbabilities(
         std::vector<karto::LocalizedRangeScan *> const & range_scans,
@@ -86,9 +87,20 @@ private:
     kt_double calculateProbabilityFromLogOdds(kt_double log);
 
     // Measurement outcomes probabilities
-    void appendCellProbabilities(std::vector<kt_double>& measurements, karto::Vector2<int> const & cell);
-    std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> computeMeasurementOutcomesHistogram(std::vector<std::vector<kt_double>>& meas_outcm);
-    void insertMeasurementOutcome(map_tuple tuple, kt_double probability, std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple>& map);
+    void appendCellProbabilities(
+        std::vector<kt_double>& measurements,
+        karto::Vector2<int> const & cell
+    );
+
+    std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> computeMeasurementOutcomesHistogram(
+        std::vector<std::vector<kt_double>>& meas_outcm
+    );
+
+    void insertMeasurementOutcome(
+        map_tuple tuple,
+        kt_double probability,
+        std::unordered_map<map_tuple,kt_double, utils::tuple_hash::HashTuple>& map
+    );
 
     // Measurements calculations <P(free), P(Occ), P(Unk)>
     kt_double calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2);
@@ -107,6 +119,9 @@ private:
     kt_double m_obs_nu;
     kt_double m_map_dist;
 
+    int m_num_cells;
+
+    // Map grids
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
 

@@ -5,6 +5,20 @@
 #include <gtest/gtest.h>
 #include "slam_toolbox/experimental/information_estimates.hpp"
 
+/*
+    Test comments
+    List of possible new tests
+        1. resizeGridFromScans
+        2. findClosestLaserIndexToCell
+        3. adjustBeamReadingDistance
+
+    Requirements for tests:
+        1. Laser with complete information
+        2. Laser with complete information and able to prodive a laser range finder
+        3. Laser with complete information and able to prodive a laser range finder
+*/
+
+
 TEST(UtilsInformationEstimatesTests, SigNumTest)
 {
     InformationEstimates information_estimates;
@@ -14,12 +28,12 @@ TEST(UtilsInformationEstimatesTests, SigNumTest)
     ASSERT_EQ(utils::grid_operations::signum(0), 0) << "FAIL in zero";
 }
 
-TEST(UtilsInformationEstimatesTests, InformationContentTest)
-{
-    InformationEstimates inf_estimates;
-    kt_double result = inf_estimates.calculateInformationContent(0.75);
-    ASSERT_DOUBLE_EQ(result, 0.81125);
-}
+// TEST(UtilsInformationEstimatesTests, InformationContentTest)
+// {
+//     InformationEstimates inf_estimates;
+//     kt_double result = inf_estimates.calculateInformationContent(0.75);
+//     ASSERT_DOUBLE_EQ(result, 0.81125);
+// }
 
 TEST(UtilsInformationEstimatesTests, ScanMassProbabilityBetweenTest)
 {
@@ -159,12 +173,28 @@ TEST(InformationEstimatesTests, MutualInformationTest)
     range_scan_vct.push_back(s2.get());
     range_scan_vct.push_back(s3.get());
 
-    // std::vector<kt_double> mut_inf_vct = inf_estimates.findLeastInformativeLaser(range_scan_vct);
+    // std::vector<kt_double> mut_inf_vct = inf_estimates.findMutualInfo(range_scan_vct);
 
-    // Min value should be different to zero (We only have now the mutual information)
-    // This will be solved as soon as I fixed the error in the main loop
-    // EXPECT_EQ(idx, 1) << "FAIL in laser index";
-    // EXPECT_NE(mut_inf, 0.0) << "FAIL in mutual information equality";
+    // kt_double prev_mutual_info = 0.0;
+
+    // int idx = 0;
+    // int final_idx = 0;
+
+    // for (auto & mutual_info : mut_inf_vct)
+    // {
+    //     if (mutual_info > prev_mutual_info)
+    //     {
+    //         prev_mutual_info = mutual_info;
+    //         final_idx = idx;
+    //     }
+    //     ++idx;
+    // }
+    // // Max value will be the one having the largest mutual information value
+    // // Since we are extracting one element at a time:
+    //     // So the element with the less mutual information will have a group with the largest result
+    //     // In this case index 1 will have the less mutual information
+    // EXPECT_EQ(final_idx, 1) << "FAIL in laser index";
+    // EXPECT_NE(prev_mutual_info, 0.0) << "FAIL in mutual information equality";
 }
 
 int main(int argc, char **argv)
