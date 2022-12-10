@@ -17,7 +17,8 @@
 namespace utils
 {
     template<typename T>
-    struct Segment2 {
+    struct Segment2
+    {
         karto::Vector2<T> start;
         karto::Vector2<T> end;
     };

@@ -221,11 +221,9 @@ void InformationEstimates::calculateCellProbabilities(
             continue;
         }
 
-        kt_double angle_to_cell_proj = angle_to_cell > 0 ? angle_to_cell : (2.0 * M_PI + angle_to_cell);
-
         karto::Vector2<kt_double> beam_point {
-            grid_scan_pose.GetX() + (*beam_distance * cos(angle_to_cell_proj)),
-            grid_scan_pose.GetY() + (*beam_distance * sin(angle_to_cell_proj))
+            grid_scan_pose.GetX() + (*beam_distance * cos(angle_to_cell)),
+            grid_scan_pose.GetY() + (*beam_distance * sin(angle_to_cell))
         };
 
         utils::Segment2<kt_double> beam_segment {
@@ -356,26 +354,6 @@ void InformationEstimates::appendCellProbabilities(std::vector<kt_double> &measu
      * Return:
      * Void
      */
-
-    /*
-        This is what is going on:
-            - In mutualInformationFromScans is a line for cleaning the visited cells m_visited_grid.setZero(), it takes place
-            right before we start processing the visited cells for a new scan.
-            - Some operations are done to calculate the probability of see a cell as occupied, free or unknown.
-            - The probabilities are given to appendCellProbabilities, so we store them into our map.
-            - Inside appendCellProbabilities we evaluate if the each cell in the current laser reading has been visited:
-                - Since we consider that a cell can be seen only once for one beam of the laser scan. In theory two beams should not
-                see the same cell, but as this is a grid map, it might happen due to the resolution. For avoiding it, we are performing
-                the following evaluation on each of the laser beams of the current laser scan.
-                    - Has this cell been seen by a beam?. If not then add it to our map, and mark this cells as a visited. EOF the function
-                    - Is the cell in the map and has been marked as visited by a beam?. If yes, then replace it because we don't want to have
-                    duplicate values
-                    - Is the cell in the map and has not been marked as visited by the current beam.
-                    Case 3 Other beam of other laser scan sees the cell and it has not been marked as visited, because this new laser
-                    just discovered that cell
-
-        I need to triger some testing for this case
-    */
     std::map<karto::Vector2<int>, std::vector<std::vector<kt_double>>>::iterator it_cell;
     it_cell = m_cell_probabilities.find(cell);
 
