@@ -127,7 +127,6 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
       computeScores(near_scan_vertices, range_scan);
 
     ScoredVertices::iterator it;
-
     for (it = scored_verices.begin(); it != scored_verices.end(); ++it) {
       if (it->GetScore() < removal_score_) {
         RCLCPP_DEBUG(get_logger(),
@@ -268,9 +267,6 @@ ScoredVertices LifelongSlamToolbox::computeScores(
   // IOU will drop sharply with fitment, I'd advise not setting this value
   // any higher than 0.15. Also check this is a linked constraint
   // We want to do this early to get a better estimate of local candidates
-  // ScanVector::iterator candidate_scan_it;
-  // double iou = 0.0;
-
   ScanVector::iterator candidate_scan_it;
   double iou = 0.0;
   for (candidate_scan_it = near_scans.begin();
