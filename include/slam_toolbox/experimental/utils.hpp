@@ -22,20 +22,14 @@ namespace utils
         karto::Vector2<T> end;
     };
 
-    template<typename T>
-    struct Box2 {
-        karto::Vector2<T> bl_corner;
-        karto::Vector2<T> br_corner;
-        karto::Vector2<T> tl_corner;
-        karto::Vector2<T> tr_corner;
-    };
-
     namespace grid_operations
     {
+        const kt_double cell_limit_eps { 0.001 };
+
         void updateCellLimits(
             std::array<karto::Vector2<kt_double>, 4> & initial_points,
             std::array<karto::Vector2<kt_double>, 4> & final_points,
-            karto::Vector2<kt_double> const & current_point,
+            karto::Vector2<kt_double> const & cell_reference_pos,
             std::array<kt_double, 4> & cell_limits,
             utils::Segment2<int> const & discretized_segment,
             kt_double const & resolution
@@ -53,11 +47,9 @@ namespace utils
             utils::Segment2<kt_double> const & segment_2
         );
 
-        std::optional<int> returnint(bool b);
-
         std::pair<std::vector<kt_double>, std::vector<kt_double>> computeLineBoxIntersection(
             utils::Segment2<kt_double> const & segment,
-            karto::Vector2<kt_double> const & current_point,
+            karto::Vector2<kt_double> const & cell_reference_pos,
             kt_double const & resolution
         );
     } // namespace grid_operations

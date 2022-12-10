@@ -95,12 +95,12 @@ std::optional<std::vector<kt_double>> InformationEstimates::calculateBeamAndCell
     utils::Segment2<kt_double> const & beam_segment,
     karto::Vector2<int> const & cell)
 {
-    karto::Vector2<kt_double> current_point{ cell.GetX() * m_cell_resol, cell.GetY() * m_cell_resol };
+    karto::Vector2<kt_double> current_cell_position{ cell.GetX() * m_cell_resol, cell.GetY() * m_cell_resol };
 
     std::pair<std::vector<kt_double>, std::vector<kt_double>> intersections =
         utils::grid_operations::computeLineBoxIntersection(
             beam_segment,
-            current_point,
+            current_cell_position,
             m_cell_resol
         );
 
@@ -152,7 +152,6 @@ void InformationEstimates::calculateAndAppendCellProbabilities(
     std::vector<kt_double> const & distances,
     karto::Vector2<int> const & cell)
 {
-
     // Measurement outcomes vector {Pfree, Pocc, Pun}
     std::vector<kt_double> probabilities{
         calculateScanMassProbabilityBetween(distances[1], m_max_sensor_range),
@@ -340,7 +339,6 @@ std::vector<karto::Vector2<int>> InformationEstimates::getScanGroupVisitedCells(
 /*************************************************************************/
 std::vector<kt_double> InformationEstimates::findMutualInfo(std::vector<karto::LocalizedRangeScan *> const &range_scans)
 {
-
     std::vector<kt_double> result_vector;
     resizeGridFromScans(range_scans);
 
