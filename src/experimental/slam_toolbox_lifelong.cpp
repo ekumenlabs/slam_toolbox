@@ -127,10 +127,9 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
       computeScores(near_scan_vertices, range_scan);
 
     ScoredVertices::iterator it;
-    kt_double mutual_removol_score = 1500.0;
 
     for (it = scored_verices.begin(); it != scored_verices.end(); ++it) {
-      if (it->GetScore() < mutual_removol_score) {
+      if (it->GetScore() < removal_score_) {
         RCLCPP_DEBUG(get_logger(),
           "Removing node %i from graph with score: %f and old score: %f.",
           it->GetVertex()->GetObject()->GetUniqueId(),
@@ -142,15 +141,6 @@ void LifelongSlamToolbox::evaluateNodeDepreciation(
     }
   }
 }
-
-
-//
-/*
-  nullptr evaluation
-  Test minimizar el radio del scan para procesar menor cantidad de scans.
-  Test constraint en el tama;o del grafo. El siguiente nodo despues del limite va a ser borrado
-*/
-//
 
 /*****************************************************************************/
 Vertices LifelongSlamToolbox::FindScansWithinRadius(
@@ -281,49 +271,28 @@ ScoredVertices LifelongSlamToolbox::computeScores(
   // ScanVector::iterator candidate_scan_it;
   // double iou = 0.0;
 
+  ScanVector::iterator candidate_scan_it;
+  double iou = 0.0;
+  for (candidate_scan_it = near_scans.begin();
+    candidate_scan_it != near_scans.end(); )
+  {
+    iou = computeIntersectOverUnion(range_scan,
+        (*candidate_scan_it)->GetObject());
+    if (iou < iou_thresh_ || (*candidate_scan_it)->GetEdges().size() < 2) {
+      candidate_scan_it = near_scans.erase(candidate_scan_it);
+    } else {
+      ++candidate_scan_it;
+    }
+  }
 
-  // std::vector<karto::LocalizedRangeScan *> range_scan_vct;
-  // std::vector<kt_double> mut_inf_vct;
-
-  // for (candidate_scan_it = near_scans.begin();
-  //   candidate_scan_it != near_scans.end(); )
-  // {
-  //   iou = computeIntersectOverUnion(range_scan, (*candidate_scan_it)->GetObject());
-  //   if (iou < iou_thresh_ || (*candidate_scan_it)->GetEdges().size() < 2)
-  //   {
-  //     candidate_scan_it = near_scans.erase(candidate_scan_it);
-  //   }
-  //   else
-  //   {
-  //     // Need to wait for at least 7 laser readings
-  //     if(range_scan_vct.size() == 7)
-  //     {
-  //       // Process the mutual information in batches of 7 readings
-  //       std::vector<kt_double> local_mut_inf = inf_estimates_.findLeastInformativeLaser(range_scan_vct);
-  //       // Append the current mutual information to the total mutual information
-  //       mut_inf_vct.insert(mut_inf_vct.end(), std::begin(local_mut_inf), std::end(local_mut_inf));
-  //       // Clean the current range vector (For the next batch)
-  //       range_scan_vct.clear();
-  //     }
-  //     else
-  //     {
-  //       range_scan_vct.push_back((*candidate_scan_it)->GetObject());
-  //       ++candidate_scan_it;
-  //     }
-  //   }
-  // }
-
-  // int idx_res = 0;
-  // for (candidate_scan_it = near_scans.begin();
-  //   candidate_scan_it != near_scans.end(); ++candidate_scan_it)
-  // {
-  //   if (mut_inf_vct.size() > 0)
-  //   {
-  //     ScoredVertex scored_vertex((*candidate_scan_it), mut_inf_vct[idx_res]);
-  //     scored_vertices.push_back(scored_vertex);
-  //     idx_res++;
-  //   }
-  // }
+  for (candidate_scan_it = near_scans.begin();
+    candidate_scan_it != near_scans.end(); ++candidate_scan_it)
+  {
+    ScoredVertex scored_vertex((*candidate_scan_it),
+      computeScore(range_scan, (*candidate_scan_it),
+      (*candidate_scan_it)->GetScore(), near_scans.size()));
+    scored_vertices.push_back(scored_vertex);
+  }
   return scored_vertices;
 }
 
