@@ -5,18 +5,28 @@
 #include <iostream>
 
 InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu)
-    : m_max_sensor_range{sensor_range},
-      m_cell_resol{resolution},
-      m_obs_lambda{lambda},
-      m_obs_nu{nu}
+    : l_free { log(0.3 / (1.0 - 0.3)) },
+    l_occ { log(0.7 / (1.0 - 0.7)) },
+    l_o { log(0.5 / (1.0 - 0.5)) },
+    m_max_sensor_range { sensor_range },
+    m_cell_resol { resolution },
+    m_obs_lambda { lambda },
+    m_obs_nu { nu },
+    m_map_dim { 0.0, 0.0 },
+    m_scan_limits { {0.0, 0.0}, {0.0, 0.0} }
 {
 }
 
 InformationEstimates::InformationEstimates()
-    : m_max_sensor_range{25.0},
-      m_cell_resol{0.1},
-      m_obs_lambda{0.35},
-      m_obs_nu{0.28}
+    : l_free { log(0.3 / (1.0 - 0.3)) },
+    l_occ { log(0.7 / (1.0 - 0.7)) },
+    l_o { log(0.5 / (1.0 - 0.5)) },
+    m_max_sensor_range{25.0},
+    m_cell_resol{0.1},
+    m_obs_lambda{0.35},
+    m_obs_nu{0.28},
+    m_map_dim { 0.0, 0.0 },
+    m_scan_limits { {0.0, 0.0}, {0.0, 0.0} }
 {
 }
 
@@ -24,10 +34,10 @@ InformationEstimates::InformationEstimates()
 //
 void InformationEstimates::resizeGridFromScans(std::vector<karto::LocalizedRangeScan *> const & range_scans)
 {
-    m_lower_limit_x = range_scans[0]->GetCorrectedPose().GetX();
-    m_lower_limit_y = range_scans[0]->GetCorrectedPose().GetY();
-    m_upper_limit_x = range_scans[0]->GetCorrectedPose().GetX();
-    m_upper_limit_y = range_scans[0]->GetCorrectedPose().GetY();
+    m_scan_limits.lower.SetX(range_scans[0]->GetCorrectedPose().GetX());
+    m_scan_limits.lower.SetY(range_scans[0]->GetCorrectedPose().GetY());
+    m_scan_limits.upper.SetX(range_scans[0]->GetCorrectedPose().GetX());
+    m_scan_limits.upper.SetY(range_scans[0]->GetCorrectedPose().GetY());
 
     for (const auto &scan : range_scans)
     {
@@ -41,21 +51,21 @@ void InformationEstimates::resizeGridFromScans(std::vector<karto::LocalizedRange
         kt_double angularResolution = scan->GetLaserRangeFinder()->GetAngularResolution();
 
         // Finding the lower limit pose
-        m_lower_limit_x = std::min(pose.GetX(), m_lower_limit_x);
-        m_lower_limit_y = std::min(pose.GetY(), m_lower_limit_y);
+        m_scan_limits.lower.SetX(std::min(pose.GetX(), m_scan_limits.lower.GetX()));
+        m_scan_limits.lower.SetY(std::min(pose.GetY(), m_scan_limits.lower.GetY()));
 
         // Finding the higher limit pose
-        m_upper_limit_x = std::max(pose.GetX(), m_upper_limit_x);
-        m_upper_limit_y = std::max(pose.GetY(), m_upper_limit_y);
+        m_scan_limits.upper.SetX(std::max(pose.GetX(), m_scan_limits.upper.GetX()));
+        m_scan_limits.upper.SetY(std::max(pose.GetY(), m_scan_limits.upper.GetY()));
     }
 
     // Map dimensions
-    m_map_dim_x = std::fabs(m_upper_limit_x - m_lower_limit_x) + (2 * m_max_sensor_range);
-    m_map_dim_y = std::fabs(m_upper_limit_y - m_lower_limit_y) + (2 * m_max_sensor_range);
+    m_map_dim.x = std::fabs(m_scan_limits.upper.GetX() - m_scan_limits.lower.GetX()) + (2 * m_max_sensor_range);
+    m_map_dim.y = std::fabs(m_scan_limits.upper.GetY() - m_scan_limits.lower.GetY()) + (2 * m_max_sensor_range);
 
-    // Get the number of cells
-    int n_cells_x = static_cast<int>(m_map_dim_x / m_cell_resol);
-    int n_cells_y = static_cast<int>(m_map_dim_y / m_cell_resol);
+    // Calculate the number of cells
+    int n_cells_x = static_cast<int>(m_map_dim.x / m_cell_resol);
+    int n_cells_y = static_cast<int>(m_map_dim.y / m_cell_resol);
 
     // Resize the grid with new number of cells
     m_mutual_grid.resize(n_cells_x, n_cells_y);
@@ -188,11 +198,13 @@ void InformationEstimates::calculateCellProbabilities(
 
         // Scan pose
         karto::Pose2 scan_pose = range_scans[s]->GetCorrectedPose();
+
         karto::Pose2 grid_scan_pose {
-            scan_pose.GetX() - (m_lower_limit_x - m_max_sensor_range),
-            scan_pose.GetY() - (m_lower_limit_y - m_max_sensor_range),
+            scan_pose.GetX() - (m_scan_limits.lower.GetX() - m_max_sensor_range),
+            scan_pose.GetY() - (m_scan_limits.lower.GetY() - m_max_sensor_range),
             scan_pose.GetHeading()
         };
+
         karto::Vector2<kt_double> cell_center{cell.GetX() * m_cell_resol + (m_cell_resol / 2), cell.GetY() * m_cell_resol + (m_cell_resol / 2)};
         kt_double angle_to_cell = atan2(cell_center.GetY() - grid_scan_pose.GetY(), cell_center.GetX() - grid_scan_pose.GetX());
         kt_double distance_to_cell = sqrt(pow(grid_scan_pose.GetX() - cell_center.GetX(), 2) + pow(grid_scan_pose.GetY() - cell_center.GetY(), 2));
@@ -318,8 +330,8 @@ std::vector<karto::Vector2<int>> InformationEstimates::getScanGroupVisitedCells(
 {
     std::vector<karto::Vector2<int>> visited_cells;
 
-    int x_upper_limit = floor(m_map_dim_x / m_cell_resol);
-    int y_upper_limit = floor(m_map_dim_y / m_cell_resol);
+    int x_upper_limit = floor(m_map_dim.x / m_cell_resol);
+    int y_upper_limit = floor(m_map_dim.y / m_cell_resol);
 
     for (int i = 0; i < x_upper_limit; ++i)
     {

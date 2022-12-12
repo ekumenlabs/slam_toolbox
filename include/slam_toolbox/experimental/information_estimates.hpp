@@ -18,6 +18,19 @@ public:
     std::vector<kt_double> findMutualInfo(std::vector<karto::LocalizedRangeScan*> const& range_scans);
 
 private:
+    struct map_dimensions
+    {
+        kt_double x;
+        kt_double y;
+    };
+
+    struct scan_position_limits
+    {
+        karto::Vector2<kt_double> lower;
+        karto::Vector2<kt_double> upper;
+    };
+
+private:
     void calculateAndAppendCellProbabilities(
         std::vector<karto::Vector2<int>> & visited_cells,
         std::vector<kt_double> const & distances,
@@ -88,34 +101,26 @@ private:
 
 private:
     // Data structures
-    // std::map<karto::Vector2<int>, std::vector<std::vector<kt_double>>> m_cell_probabilities;
     map_cell_probabilities m_cell_probabilities;
 
-    const kt_double l_free { log(0.3 / (1.0 - 0.3)) };
-    const kt_double l_occ { log(0.7 / (1.0 - 0.7)) };
-    const kt_double l_o { log(0.5 / (1.0 - 0.5)) };
+    // Probability constants
+    const kt_double l_free;
+    const kt_double l_occ;
+    const kt_double l_o;
 
+    // Configuration
     kt_double m_max_sensor_range;
     kt_double m_cell_resol;
     kt_double m_obs_lambda;
     kt_double m_obs_nu;
 
-    int m_num_cells;
-
     // Map grids
     Eigen::MatrixXd m_mutual_grid;
     Eigen::MatrixXi m_visited_grid;
 
-    // Box limits (maybe it work better here
-    // min_x, max_x, min_y, max_y)
-    kt_double m_upper_limit_x;
-    kt_double m_upper_limit_y;
-    kt_double m_lower_limit_x;
-    kt_double m_lower_limit_y;
-
-    // I can define an struct for this
-    kt_double m_map_dim_x;
-    kt_double m_map_dim_y;
+    // Map limits
+    map_dimensions m_map_dim;
+    scan_position_limits m_scan_limits;
 };
 
 #endif
