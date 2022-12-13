@@ -21,12 +21,14 @@
 
 #include <memory>
 #include "slam_toolbox/slam_toolbox_common.hpp"
+#include "slam_toolbox/experimental/information_estimates.hpp"
 
 namespace slam_toolbox
 {
 
 class LifelongSlamToolbox : public SlamToolbox
 {
+
 public:
   explicit LifelongSlamToolbox(rclcpp::NodeOptions options);
   ~LifelongSlamToolbox() {}
@@ -74,6 +76,9 @@ protected:
   double candidates_scale_;
   double iou_match_;
   double nearby_penalty_;
+
+  InformationEstimates inf_estimates_{ 0.1 };
+
 };
 
 }  // namespace slam_toolbox
