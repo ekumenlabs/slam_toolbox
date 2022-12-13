@@ -4,27 +4,23 @@
 
 #include <iostream>
 
-InformationEstimates::InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu)
-    : l_free { log(0.3 / (1.0 - 0.3)) },
+InformationEstimates::InformationEstimates(kt_double resolution)
+    : m_cell_resol { resolution },
+    m_max_sensor_range { 25.0 },
+    l_free { log(0.3 / (1.0 - 0.3)) },
     l_occ { log(0.7 / (1.0 - 0.7)) },
     l_o { log(0.5 / (1.0 - 0.5)) },
-    m_max_sensor_range { sensor_range },
-    m_cell_resol { resolution },
-    m_obs_lambda { lambda },
-    m_obs_nu { nu },
     m_map_dim { 0.0, 0.0 },
     m_scan_limits { {0.0, 0.0}, {0.0, 0.0} }
 {
 }
 
 InformationEstimates::InformationEstimates()
-    : l_free { log(0.3 / (1.0 - 0.3)) },
+    : m_cell_resol { 0.1 },
+    m_max_sensor_range { 25.0 },
+    l_free { log(0.3 / (1.0 - 0.3)) },
     l_occ { log(0.7 / (1.0 - 0.7)) },
     l_o { log(0.5 / (1.0 - 0.5)) },
-    m_max_sensor_range{25.0},
-    m_cell_resol{0.1},
-    m_obs_lambda{0.35},
-    m_obs_nu{0.28},
     m_map_dim { 0.0, 0.0 },
     m_scan_limits { {0.0, 0.0}, {0.0, 0.0} }
 {
@@ -38,6 +34,10 @@ void InformationEstimates::resizeGridFromScans(std::vector<karto::LocalizedRange
     m_scan_limits.lower.SetY(range_scans[0]->GetCorrectedPose().GetY());
     m_scan_limits.upper.SetX(range_scans[0]->GetCorrectedPose().GetX());
     m_scan_limits.upper.SetY(range_scans[0]->GetCorrectedPose().GetY());
+
+
+    karto::LaserRangeFinder *laser_range_finder = range_scans[0]->GetLaserRangeFinder();
+    m_max_sensor_range = laser_range_finder->GetRangeThreshold();
 
     for (const auto &scan : range_scans)
     {
@@ -142,10 +142,9 @@ std::optional<std::vector<kt_double>> InformationEstimates::calculateBeamAndCell
 //
 std::optional<kt_double> InformationEstimates::adjustBeamReadingDistance(
     kt_double const & beam_distance,
-    kt_double const & distance_to_cell,
-    karto::LaserRangeFinder *laser_range_finder)
+    kt_double const & distance_to_cell)
 {
-    if ((beam_distance > laser_range_finder->GetRangeThreshold()) || (beam_distance < distance_to_cell))
+    if ((beam_distance > m_max_sensor_range) || (beam_distance < distance_to_cell))
     {
         return {};
     }
@@ -226,7 +225,7 @@ void InformationEstimates::calculateCellProbabilities(
         }
 
         kt_double beam_read_dist = range_scans[s]->GetRangeReadings()[*laser_idx];
-        std::optional<kt_double> beam_distance = adjustBeamReadingDistance(beam_read_dist, distance_to_cell, laser_range_finder);
+        std::optional<kt_double> beam_distance = adjustBeamReadingDistance(beam_read_dist, distance_to_cell);
 
         if (!beam_distance.has_value())
         {
@@ -271,11 +270,8 @@ std::vector<kt_double> InformationEstimates::getScanGroupMutualInformation(
 )
 {
     karto::LaserRangeFinder *laser_range_finder = range_scans[0]->GetLaserRangeFinder();
-    kt_double range_threshold = laser_range_finder->GetRangeThreshold();
     kt_double angle_increment = laser_range_finder->GetAngularResolution();
-    kt_double min_angle = laser_range_finder->GetMinimumAngle();
-    kt_double max_angle = laser_range_finder->GetMaximumAngle();
-    kt_double total_range = max_angle - min_angle;
+    kt_double total_range = laser_range_finder->GetMaximumAngle() - laser_range_finder->GetMinimumAngle();
 
     std::vector<kt_double> scans_mutual_information;
 
@@ -495,14 +491,13 @@ std::unordered_map<InformationEstimates::map_tuple, kt_double, utils::tuple_hash
 kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const &meas_outcome)
 {
     /**
-     * Calculate the measurement outcome entropy
-     * Calculate Log-Odds from initial probability guess
-     * Calculate the probability from those logs
-     * Calculate the entropy with the retrieved probability
-     * Arguments:
-     * meas_outcome [map_tuple]: Measurement outcome in the form {p_free, p_occ, p_unk}
-     * Return:
-     * kt_double: Measurement outcome entropy
+     * @brief Calculate the measurement outcome entropy in the following steps:
+      * Calculate the measurement outcome entropy
+      * Calculate Log-Odds from initial probability guess
+      * Calculate the probability from those logs
+      * Calculate the entropy with the retrieved probability
+     * @arg meas_outcome [map_tuple]: Measurement outcome combinations
+     * @return [kt_double]: Measurement outcome entropy
      */
     int num_free, num_occ, num_unk;
     std::tie(num_free, num_occ, num_unk) = meas_outcome;
@@ -514,18 +509,17 @@ kt_double InformationEstimates::measurementOutcomeEntropy(map_tuple const &meas_
 kt_double InformationEstimates::calculateScanMassProbabilityBetween(kt_double range_1, kt_double range_2)
 {
     /**
-     * Calculate the mass probability of a cell being observed by a given measurement
-     * Arguments:
-        * range_1 [kt_double]: Lower bound
-        * range_2 [kt_double]: Upper bound
-     * Return:
-        * kt_double: Mass probability
+     * @brief Calculate the mass probability of a cell being observed by a given measurement.
+      * An exponential distribution is implemeted where the rate parameter is calculated
+      * based on the max laser range.
+     * @arg range_1 [kt_double]: Lower bound
+     * @arg range_2 [kt_double]: Upper bound
+     * @return [kt_double]: Mass probability between given ranges
     */
     range_1 = (range_1 > m_max_sensor_range) ? m_max_sensor_range : range_1;
     range_2 = (range_2 > m_max_sensor_range) ? m_max_sensor_range : range_2;
 
-    // 12.2 because that is roughly the max range when lambda is equals to 1
-    kt_double lambda = 12.2 / m_max_sensor_range;
+    kt_double lambda = lambda_factor / m_max_sensor_range;
 
     return -(exp(-lambda * range_2) - exp(-lambda * range_1));
 }

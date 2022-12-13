@@ -10,7 +10,7 @@ class InformationEstimates
     typedef std::unordered_map<map_tuple, kt_double, utils::tuple_hash::HashTuple> probability_map;
 
 public:
-    InformationEstimates(kt_double sensor_range, kt_double resolution, kt_double lambda, kt_double nu);
+    InformationEstimates(kt_double resolution);
     InformationEstimates();
     virtual ~InformationEstimates() {}
 
@@ -44,8 +44,7 @@ private:
 
     std::optional<kt_double> adjustBeamReadingDistance(
         kt_double const & beam_distance,
-        kt_double const & distance_to_cell,
-        karto::LaserRangeFinder *laser_range_finder
+        kt_double const & distance_to_cell
     );
 
     karto::Vector2<int> getLaserBeamCell(
@@ -103,16 +102,17 @@ private:
     // Data structures
     map_cell_probabilities m_cell_probabilities;
 
+    // Configuration
+    kt_double m_cell_resol;
+    kt_double m_max_sensor_range;
+
     // Probability constants
     const kt_double l_free;
     const kt_double l_occ;
     const kt_double l_o;
 
-    // Configuration
-    kt_double m_max_sensor_range;
-    kt_double m_cell_resol;
-    kt_double m_obs_lambda;
-    kt_double m_obs_nu;
+    // Factor to calculate exponential distribution rate
+    const kt_double lambda_factor { 6.0 };
 
     // Map grids
     Eigen::MatrixXd m_mutual_grid;

@@ -77,7 +77,7 @@ protected:
   double iou_match_;
   double nearby_penalty_;
 
-  InformationEstimates inf_estimates_{10.0, 0.05, 0.35, 0.28};
+  InformationEstimates inf_estimates_{ 0.1 };
 
 };
 
